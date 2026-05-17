@@ -373,6 +373,46 @@ function initMemo() {
     });
 }
 
+function initBackground() {
+    const bgInput = document.getElementById('bg-image-input');
+    const clearBgBtn = document.getElementById('clear-bg-btn');
+    const BG_STORAGE_KEY = 'pondashi_bg_image';
+
+    const applyBackground = (dataUrl) => {
+        if (dataUrl) {
+            document.body.style.backgroundImage = `url('${dataUrl}')`;
+        } else {
+            document.body.style.backgroundImage = 'none';
+        }
+    };
+
+    const savedBg = localStorage.getItem(BG_STORAGE_KEY);
+    applyBackground(savedBg);
+
+    if (bgInput) {
+        bgInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const dataUrl = event.target.result;
+                localStorage.setItem(BG_STORAGE_KEY, dataUrl);
+                applyBackground(dataUrl);
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    if (clearBgBtn) {
+        clearBgBtn.addEventListener('click', () => {
+            localStorage.removeItem(BG_STORAGE_KEY);
+            applyBackground(null);
+            if (bgInput) bgInput.value = "";
+        });
+    }
+}
+
 const DEFAULT_SECTIONS = [
   { id: "bgm", title: "🎵 曲・BGM", style: "bgm", order: 1, isCollapsed: false },
   { id: "jingle1", title: "📢 ジングル・CM", style: "bgm", order: 2, isCollapsed: false },
@@ -382,6 +422,7 @@ const DEFAULT_SECTIONS = [
 
 document.addEventListener('DOMContentLoaded', async () => {
     initMemo(); // メモ機能の初期化
+    initBackground(); // 背景画像の初期化
     try {
         await initDB();
         sections = await getAllSections();
