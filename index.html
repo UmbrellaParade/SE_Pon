@@ -81,22 +81,17 @@
             <textarea id="memo-area" style="flex-grow: 1; resize: none; width: 100%; padding: 12px; font-family: inherit; font-size: 0.95em; background: #1a1a1a; color: #eee; border: 1px solid #444; border-radius: 8px; box-sizing: border-box; line-height: 1.5; margin-bottom: 15px;" placeholder="ここに配信の流れや段取りを自由にメモできます...&#10;&#10;例：&#10;1. オープニング（BGM 1）&#10;2. 挨拶・本日のテーマ&#10;3. コーナー①（効果音）&#10;..."></textarea>
             
             <!-- データ引き継ぎセクション -->
-            <div style="background: #1e1e1e; padding: 10px; border-radius: 8px; border: 1px solid #333;">
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
-                    <h3 style="margin-top: 0; font-size: 1em; display: flex; justify-content: space-between; align-items: center;">
-                        ⚙️ データ引き継ぎ・バックアップ
-                    </h3>
-                    <div style="display: flex; gap: 5px; flex-direction: column;">
-                        <button id="export-btn" style="padding: 10px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%;">
-                            書き出し（保存）
-                        </button>
-                        <label style="padding: 10px; background-color: #555; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; text-align: center; box-sizing: border-box;">
-                            読み込み（復元）
-                            <input type="file" id="import-file" accept=".json" style="display: none;">
-                        </label>
-                    </div>
+            <div style="background: #1e1e1e; padding: 8px; border-radius: 8px; border: 1px solid #333;">
+                <div style="font-size: 0.8em; color: #aaa; margin-bottom: 5px;">⚙️ データ引き継ぎ・バックアップ</div>
+                <div style="display: flex; gap: 5px;">
+                    <button id="export-btn" style="padding: 6px 4px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; flex: 1; font-size: 0.85em;">
+                        書き出し
+                    </button>
+                    <label style="padding: 6px 4px; background-color: #555; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; flex: 1; text-align: center; box-sizing: border-box; font-size: 0.85em;">
+                        読み込み
+                        <input type="file" id="import-file" accept=".json" style="display: none;">
+                    </label>
                 </div>
-                <div style="font-size: 0.7em; color: #888; margin-top: 5px;">※音声ファイル本体は引き継げないため、読み込み後に再設定が必要です。</div>
             </div>
         </aside>
 
@@ -120,6 +115,13 @@
             <main id="sections-container">
                 <!-- JSで動的にセクションが生成されます -->
             </main>
+
+            <!-- リセットボタン（最下部右端） -->
+            <div style="display: flex; justify-content: flex-end; margin-top: 40px; padding-top: 20px; border-top: 1px solid #333;">
+                <button id="reset-btn" style="padding: 6px 14px; background-color: transparent; color: #555; border: 1px solid #444; border-radius: 4px; cursor: pointer; font-size: 0.75em;">
+                    🔄 アプリをデフォルトに戻す
+                </button>
+            </div>
         </div>
     </div>
     <script src="script.js"></script>

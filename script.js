@@ -467,6 +467,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         initDataTransfer(); // データ引き継ぎ機能の初期化
+        initResetButton();  // リセットボタンの初期化
     } catch (e) {
         console.error("データベースエラー", e);
     }
@@ -1008,6 +1009,36 @@ function createItem(index, secId, style, container, initialData = null) {
 
     enableDragAndDrop(item, container, secId);
     container.appendChild(item);
+}
+
+// --- リセット機能 ---
+function initResetButton() {
+    const resetBtn = document.getElementById('reset-btn');
+    if (!resetBtn) return;
+
+    resetBtn.addEventListener('click', async () => {
+        const ok1 = await customConfirm('アプリをデフォルト状態に戻しますか？\n設定した音声ファイル・欄の構成・メモ・テンプレートがすべて削除されます。');
+        if (!ok1) return;
+        const ok2 = await customConfirm('本当によろしいですか？\nこの操作は元に戻せません。');
+        if (!ok2) return;
+
+        // IndexedDB を全消去
+        if (db) {
+            const txAudio = db.transaction([STORE_NAME_AUDIO], 'readwrite');
+            txAudio.objectStore(STORE_NAME_AUDIO).clear();
+            const txSec = db.transaction([STORE_NAME_SECTION], 'readwrite');
+            txSec.objectStore(STORE_NAME_SECTION).clear();
+        }
+
+        // localStorage を全消去
+        localStorage.removeItem(MEMO_STORAGE_KEY);
+        localStorage.removeItem(TEMPLATE_STORAGE_KEY);
+        localStorage.removeItem('pondashi_overlap_states');
+        localStorage.removeItem('pondashi_volume_migration_v1');
+
+        await customAlert('デフォルトに戻しました！\n画面を更新します。');
+        location.reload();
+    });
 }
 
 // --- データ引き継ぎ（エクスポート・インポート）機能 ---
