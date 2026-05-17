@@ -374,40 +374,58 @@ function initMemo() {
     });
 }
 
-function initBackground() {
+async function initBackground() {
     const bgInput = document.getElementById('bg-image-input');
     const clearBgBtn = document.getElementById('clear-bg-btn');
-    const BG_STORAGE_KEY = 'pondashi_bg_image';
 
-    const applyBackground = (dataUrl) => {
-        if (dataUrl) {
-            document.body.style.backgroundImage = `url('${dataUrl}')`;
+    const applyBackground = (file) => {
+        if (file) {
+            const objectUrl = URL.createObjectURL(file);
+            document.body.style.backgroundImage = `url('${objectUrl}')`;
         } else {
             document.body.style.backgroundImage = 'none';
         }
     };
 
-    const savedBg = localStorage.getItem(BG_STORAGE_KEY);
-    applyBackground(savedBg);
+    // DBから画像を読み込む（DB初期化後に呼ばれる前提）
+    const loadBgFromDB = () => {
+        return new Promise((resolve) => {
+            if (!db) return resolve(null);
+            const tx = db.transaction([STORE_NAME_AUDIO], 'readonly');
+            const req = tx.objectStore(STORE_NAME_AUDIO).get('bg-image');
+            req.onsuccess = () => {
+                if (req.result && req.result.file) {
+                    resolve(req.result.file);
+                } else {
+                    resolve(null);
+                }
+            };
+            req.onerror = () => resolve(null);
+        });
+    };
+
+    const savedFile = await loadBgFromDB();
+    if (savedFile) {
+        applyBackground(savedFile);
+    }
 
     if (bgInput) {
         bgInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const dataUrl = event.target.result;
-                localStorage.setItem(BG_STORAGE_KEY, dataUrl);
-                applyBackground(dataUrl);
-            };
-            reader.readAsDataURL(file);
+            // IndexedDBのaudioDataストアを間借りして保存
+            saveData('bg-image', file, file.name, 1, false, 1);
+            applyBackground(file);
         });
     }
 
     if (clearBgBtn) {
         clearBgBtn.addEventListener('click', () => {
-            localStorage.removeItem(BG_STORAGE_KEY);
+            if (db) {
+                const tx = db.transaction([STORE_NAME_AUDIO], 'readwrite');
+                tx.objectStore(STORE_NAME_AUDIO).delete('bg-image');
+            }
             applyBackground(null);
             if (bgInput) bgInput.value = "";
         });
@@ -423,9 +441,9 @@ const DEFAULT_SECTIONS = [
 
 document.addEventListener('DOMContentLoaded', async () => {
     initMemo(); // メモ機能の初期化
-    initBackground(); // 背景画像の初期化
     try {
         await initDB();
+        await initBackground(); // 背景画像の初期化 (DB初期化後に呼ぶ)
         sections = await getAllSections();
         if (sections.length === 0) {
             sections = DEFAULT_SECTIONS;
