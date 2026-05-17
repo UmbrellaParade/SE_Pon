@@ -63,18 +63,23 @@
         <aside class="sidebar">
             <h2 style="margin-top: 0; font-size: 1.2em; border-bottom: 1px solid #444; padding-bottom: 10px;">📝 配信の段取りメモ</h2>
             
-            <div class="template-controls" style="margin-bottom: 15px; background: #1e1e1e; padding: 10px; border-radius: 8px; border: 1px solid #333;">
-                <div style="font-size: 0.8em; color: #aaa; margin-bottom: 5px;">📑 テンプレート</div>
-                <select id="template-select" style="width: 100%; padding: 6px; margin-bottom: 8px; background: #333; color: white; border: 1px solid #555; border-radius: 4px;">
-                    <option value="">-- テンプレートを選択 --</option>
-                </select>
-                <div style="display: flex; gap: 5px; margin-bottom: 5px;">
-                    <button id="load-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #444; color: white; border: none; border-radius: 4px; font-size: 0.9em;">読込</button>
-                    <button id="save-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px; font-size: 0.9em;">新規保存</button>
+            <div class="template-controls" style="margin-bottom: 15px; background: #1e1e1e; border-radius: 8px; border: 1px solid #333; overflow: hidden;">
+                <div id="template-toggle" style="font-size: 0.8em; color: #aaa; padding: 8px 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+                    <span>📑 テンプレート</span>
+                    <span id="template-toggle-icon">▼</span>
                 </div>
-                <div style="display: flex; gap: 5px;">
-                    <button id="update-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #2196F3; color: white; border: none; border-radius: 4px; font-size: 0.9em;">上書き</button>
-                    <button id="delete-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #f44336; color: white; border: none; border-radius: 4px; font-size: 0.9em;">削除</button>
+                <div id="template-body" style="padding: 0 10px 10px 10px;">
+                    <select id="template-select" style="width: 100%; padding: 6px; margin-bottom: 8px; background: #333; color: white; border: 1px solid #555; border-radius: 4px;">
+                        <option value="">-- テンプレートを選択 --</option>
+                    </select>
+                    <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                        <button id="load-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #444; color: white; border: none; border-radius: 4px; font-size: 0.9em;">読込</button>
+                        <button id="save-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px; font-size: 0.9em;">新規保存</button>
+                    </div>
+                    <div style="display: flex; gap: 5px;">
+                        <button id="update-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #2196F3; color: white; border: none; border-radius: 4px; font-size: 0.9em;">上書き</button>
+                        <button id="delete-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #f44336; color: white; border: none; border-radius: 4px; font-size: 0.9em;">削除</button>
+                    </div>
                 </div>
             </div>
 

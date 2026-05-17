@@ -274,6 +274,23 @@ function initMemo() {
     const updateBtn = document.getElementById('update-template-btn');
     const deleteBtn = document.getElementById('delete-template-btn');
 
+    // テンプレート欄の折りたたみ
+    const templateToggle = document.getElementById('template-toggle');
+    const templateBody = document.getElementById('template-body');
+    const templateToggleIcon = document.getElementById('template-toggle-icon');
+    const TEMPLATE_COLLAPSED_KEY = 'pondashi_template_collapsed';
+
+    if (localStorage.getItem(TEMPLATE_COLLAPSED_KEY) === '1') {
+        templateBody.style.display = 'none';
+        templateToggleIcon.textContent = '▶';
+    }
+    templateToggle.addEventListener('click', () => {
+        const isCollapsed = templateBody.style.display === 'none';
+        templateBody.style.display = isCollapsed ? 'block' : 'none';
+        templateToggleIcon.textContent = isCollapsed ? '▼' : '▶';
+        localStorage.setItem(TEMPLATE_COLLAPSED_KEY, isCollapsed ? '0' : '1');
+    });
+
     // 保存されているメモの復元
     const savedMemo = localStorage.getItem(MEMO_STORAGE_KEY);
     if (savedMemo) {
