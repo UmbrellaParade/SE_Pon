@@ -231,6 +231,40 @@ function customConfirm(message) {
     });
 }
 
+function showCopyMoveModal(optionsHtml) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed'; overlay.style.top = '0'; overlay.style.left = '0'; overlay.style.width = '100vw'; overlay.style.height = '100vh'; overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)'; overlay.style.zIndex = '9999'; overlay.style.display = 'flex'; overlay.style.justifyContent = 'center'; overlay.style.alignItems = 'center';
+        overlay.innerHTML = `
+            <div style="background-color:#2a2a2a; padding:20px; border-radius:8px; width:400px; max-width:90%; color:#fff; font-family:inherit;">
+                <h3 style="margin-top:0;">枠のコピー / 移動</h3>
+                <p style="font-size:0.9em; margin-bottom:15px;">この枠をどの欄にコピーまたは移動しますか？</p>
+                <select id="cm-sec-select" style="width:100%; padding:8px; margin-bottom:20px; font-size:1em; background:#111; color:#fff; border:1px solid #555; border-radius:4px;">
+                    ${optionsHtml}
+                </select>
+                <div style="display:flex; justify-content:flex-end; gap:10px;">
+                    <button id="cm-cancel" style="padding:8px 16px; background:#555; color:#fff; border:none; border-radius:4px; cursor:pointer;">キャンセル</button>
+                    <button id="cm-copy" style="padding:8px 16px; background:#2196F3; color:#fff; border:none; border-radius:4px; cursor:pointer;">📋 コピー(複製)</button>
+                    <button id="cm-move" style="padding:8px 16px; background:#4CAF50; color:#fff; border:none; border-radius:4px; cursor:pointer;">➡️ 移動</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const close = (val) => { if(document.body.contains(overlay)) document.body.removeChild(overlay); resolve(val); };
+
+        overlay.querySelector('#cm-cancel').addEventListener('click', () => close(null));
+        overlay.querySelector('#cm-copy').addEventListener('click', () => {
+            const val = overlay.querySelector('#cm-sec-select').value;
+            close({ secId: val, action: 'copy' });
+        });
+        overlay.querySelector('#cm-move').addEventListener('click', () => {
+            const val = overlay.querySelector('#cm-sec-select').value;
+            close({ secId: val, action: 'move' });
+        });
+    });
+}
+
 function initMemo() {
     const memoArea = document.getElementById('memo-area');
     const templateSelect = document.getElementById('template-select');
@@ -650,8 +684,9 @@ function createItem(index, secId, style, container, initialData = null) {
     item.innerHTML = `
         <div class="item-header" style="display:flex; justify-content:space-between; align-items:center;">
             <span class="item-title">${titleText}</span>
-            <div>
+            <div style="display:flex; align-items:center;">
                 <label><input type="checkbox" class="repeat-check" ${audio.loop ? 'checked' : ''}> リピート</label>
+                <button class="copy-move-btn" style="margin-left:8px; background:none; border:none; color:#2196F3; cursor:pointer; font-size:1.1em;" title="他の欄へコピー/移動">📋</button>
                 <button class="delete-btn" style="margin-left:8px; background:none; border:none; color:#ff5555; cursor:pointer; font-size:1.1em;" title="この枠を削除">✖</button>
             </div>
         </div>
@@ -697,6 +732,56 @@ function createItem(index, secId, style, container, initialData = null) {
         item.querySelector('.item-title').textContent = `${secTitleBase} ${newIndex}`;
         updateDB();
     };
+
+    item.getCurrentState = () => {
+        return {
+            file: currentFile,
+            fileName: currentFileName,
+            volume: baseVolume,
+            mcVolume: mcVolume,
+            loop: audio.loop
+        };
+    };
+
+    // コピー・移動処理
+    const copyMoveBtn = item.querySelector('.copy-move-btn');
+    if (copyMoveBtn) {
+        copyMoveBtn.addEventListener('click', async () => {
+            let optionsHtml = '';
+            sections.forEach(s => {
+                optionsHtml += `<option value="${s.id}" ${s.id === secId ? 'selected' : ''}>${s.title}</option>`;
+            });
+            
+            const result = await showCopyMoveModal(optionsHtml);
+            if (!result) return;
+
+            const targetSecId = result.secId;
+            const action = result.action;
+            const state = item.getCurrentState();
+
+            const targetSec = sections.find(s => s.id === targetSecId);
+            if (!targetSec) return;
+
+            if (action === 'move') {
+                clearInterval(fadeInterval);
+                audio.pause();
+                item.remove();
+                await reindexItems(secId);
+            }
+
+            sectionCounts[targetSecId]++;
+            const newContainer = document.getElementById(`${targetSecId}-container`);
+            if (newContainer) {
+                createItem(sectionCounts[targetSecId], targetSecId, targetSec.style, newContainer, state);
+                await reindexItems(targetSecId);
+            }
+            
+            // DOM更新待ち
+            setTimeout(() => {
+                customAlert(action === 'move' ? '移動しました！' : 'コピーしました！');
+            }, 100);
+        });
+    }
 
     deleteBtn.addEventListener('click', async () => {
         const ok = await customConfirm('この枠を削除しますか？');
