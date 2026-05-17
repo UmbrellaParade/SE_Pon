@@ -91,6 +91,7 @@ let sections = [];
 let sectionCounts = {};
 let autoPlayStates = {};
 let overlapPlayStates = {}; // 重ねて再生の設定
+let navVisibilityStates = {}; // 目次に表示の設定
 
 // --- メモ＆テンプレート機能 ---
 let templates = [];
@@ -439,6 +440,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
+        // 目次表示の初期値読み込み
+        try {
+            const savedNavVisibility = localStorage.getItem('pondashi_nav_visibility');
+            if (savedNavVisibility) {
+                navVisibilityStates = JSON.parse(savedNavVisibility);
+            }
+        } catch(e) {}
+        sections.forEach(sec => {
+            if (navVisibilityStates[sec.id] === undefined) {
+                navVisibilityStates[sec.id] = true; // デフォルトは表示
+            }
+        });
+
         savedAudioData.forEach(data => {
             const parts = data.id.split('-');
             const secId = parts[0];
@@ -497,6 +511,7 @@ function updateSectionNav() {
     if (!nav) return;
     nav.innerHTML = '';
     sections.forEach(sec => {
+        if (navVisibilityStates[sec.id] === false) return;
         const btn = document.createElement('button');
         btn.textContent = sec.title;
         btn.style.cssText = 'padding: 4px 14px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 20px; cursor: pointer; font-size: 0.85em; white-space: nowrap; transition: background 0.2s;';
@@ -548,6 +563,10 @@ function appendSectionDOM(sec, savedAudioData) {
                 <label style="font-size:0.9em; display:flex; align-items:center;" title="チェックを入れると他の音を止めずに重ねて鳴らします">
                     <input type="checkbox" class="overlap-play-check" ${overlapPlayStates[sec.id] ? 'checked' : ''} style="margin-right:3px;">
                     重ねて再生
+                </label>
+                <label style="font-size:0.9em; display:flex; align-items:center;" title="チェックを外すと目次に表示されなくなります">
+                    <input type="checkbox" class="nav-visibility-check" ${navVisibilityStates[sec.id] !== false ? 'checked' : ''} style="margin-right:3px;">
+                    目次
                 </label>
                 <button class="delete-sec-btn" data-sec="${sec.id}" style="background:none; border:none; color:#ff5555; cursor:pointer; font-size:0.85em; text-decoration:underline; white-space:nowrap;">🗑️ 欄ごと削除</button>
             </div>
@@ -601,6 +620,12 @@ function appendSectionDOM(sec, savedAudioData) {
     sectionEl.querySelector('.overlap-play-check').addEventListener('change', (e) => {
         overlapPlayStates[sec.id] = e.target.checked;
         localStorage.setItem('pondashi_overlap_states', JSON.stringify(overlapPlayStates));
+    });
+
+    sectionEl.querySelector('.nav-visibility-check').addEventListener('change', (e) => {
+        navVisibilityStates[sec.id] = e.target.checked;
+        localStorage.setItem('pondashi_nav_visibility', JSON.stringify(navVisibilityStates));
+        updateSectionNav();
     });
 
     sectionEl.querySelector('.delete-sec-btn').addEventListener('click', async () => {
