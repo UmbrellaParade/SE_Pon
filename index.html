@@ -78,7 +78,19 @@
                 </div>
             </div>
 
-            <textarea id="memo-area" style="flex-grow: 1; resize: none; width: 100%; padding: 12px; font-family: inherit; font-size: 0.95em; background: #1a1a1a; color: #eee; border: 1px solid #444; border-radius: 8px; box-sizing: border-box; line-height: 1.5;" placeholder="ここに配信の流れや段取りを自由にメモできます...&#10;&#10;例：&#10;1. オープニング（BGM 1）&#10;2. 挨拶・本日のテーマ&#10;3. コーナー①（効果音）&#10;..."></textarea>
+            <textarea id="memo-area" style="flex-grow: 1; resize: none; width: 100%; padding: 12px; font-family: inherit; font-size: 0.95em; background: #1a1a1a; color: #eee; border: 1px solid #444; border-radius: 8px; box-sizing: border-box; line-height: 1.5; margin-bottom: 15px;" placeholder="ここに配信の流れや段取りを自由にメモできます...&#10;&#10;例：&#10;1. オープニング（BGM 1）&#10;2. 挨拶・本日のテーマ&#10;3. コーナー①（効果音）&#10;..."></textarea>
+            
+            <!-- データ引き継ぎセクション -->
+            <div style="background: #1e1e1e; padding: 10px; border-radius: 8px; border: 1px solid #333;">
+                <div style="font-size: 0.8em; color: #aaa; margin-bottom: 5px;">⚙️ データ引き継ぎ・バックアップ</div>
+                <div style="display: flex; gap: 5px;">
+                    <button id="export-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #607d8b; color: white; border: none; border-radius: 4px; font-size: 0.85em;" title="現在の欄やメモの設定をファイルに保存します">書き出し</button>
+                    <label class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #607d8b; color: white; border: none; border-radius: 4px; font-size: 0.85em; text-align: center;" title="保存した設定ファイルを読み込みます">
+                        読み込み <input type="file" id="import-file" accept=".json" style="display: none;">
+                    </label>
+                </div>
+                <div style="font-size: 0.7em; color: #888; margin-top: 5px;">※音声ファイル本体は引き継げないため、読み込み後に再設定が必要です。</div>
+            </div>
         </aside>
 
         <!-- 右側メインコンテンツ（ポン出しアプリ本体） -->

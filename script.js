@@ -249,6 +249,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             appendSectionDOM(newSec, []);
         });
+
+        initDataTransfer(); // データ引き継ぎ機能の初期化
     } catch (e) {
         console.error("データベースエラー", e);
     }
@@ -701,4 +703,114 @@ function createItem(index, secId, style, container, initialData = null) {
 
     enableDragAndDrop(item, container, secId);
     container.appendChild(item);
+}
+
+// --- データ引き継ぎ（エクスポート・インポート）機能 ---
+function initDataTransfer() {
+    const exportBtn = document.getElementById('export-btn');
+    const importInput = document.getElementById('import-file');
+
+    if (!exportBtn || !importInput) return;
+
+    // 書き出し機能
+    exportBtn.addEventListener('click', async () => {
+        try {
+            const allSections = await getAllSections();
+            const allAudioData = await getAllData();
+            
+            // FileオブジェクトはJSONにできないため除外し、必要な設定だけを抽出
+            const audioDataWithoutFiles = allAudioData.map(data => {
+                return {
+                    id: data.id,
+                    fileName: data.fileName,
+                    volume: data.volume,
+                    loop: data.loop,
+                    mcVolume: data.mcVolume
+                };
+            });
+
+            const memo = localStorage.getItem(MEMO_STORAGE_KEY) || "";
+            const templates = localStorage.getItem(TEMPLATE_STORAGE_KEY) || "[]";
+
+            const exportObj = {
+                sections: allSections,
+                audioData: audioDataWithoutFiles,
+                memo: memo,
+                templates: JSON.parse(templates)
+            };
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "pondashi_backup.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        } catch (e) {
+            console.error("エクスポートエラー", e);
+            alert("データの書き出しに失敗しました。");
+        }
+    });
+
+    // 読み込み機能
+    importInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const importedObj = JSON.parse(event.target.result);
+                
+                if (!importedObj.sections || !importedObj.audioData) {
+                    throw new Error("無効なファイルフォーマットです。");
+                }
+
+                if (!confirm("現在の設定や欄はすべて上書きされます。よろしいですか？\n※音声ファイル本体は再設定が必要になります。")) {
+                    importInput.value = ""; // キャンセル時はリセット
+                    return;
+                }
+
+                if (db) {
+                    // セクションの復元
+                    const txSec = db.transaction([STORE_NAME_SECTION], 'readwrite');
+                    txSec.objectStore(STORE_NAME_SECTION).clear();
+                    importedObj.sections.forEach(s => {
+                        txSec.objectStore(STORE_NAME_SECTION).put(s);
+                    });
+
+                    // オーディオ設定の復元
+                    const txAudio = db.transaction([STORE_NAME_AUDIO], 'readwrite');
+                    txAudio.objectStore(STORE_NAME_AUDIO).clear();
+                    importedObj.audioData.forEach(a => {
+                        txAudio.objectStore(STORE_NAME_AUDIO).put({
+                            id: a.id,
+                            file: null, // 音声ファイル本体はnullで保存
+                            fileName: a.fileName,
+                            volume: a.volume,
+                            loop: a.loop,
+                            mcVolume: a.mcVolume
+                        });
+                    });
+                }
+
+                // メモ・テンプレートの復元
+                if (importedObj.memo !== undefined) {
+                    localStorage.setItem(MEMO_STORAGE_KEY, importedObj.memo);
+                }
+                if (importedObj.templates !== undefined) {
+                    localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(importedObj.templates));
+                }
+
+                alert("データの読み込みが完了しました！\n画面を更新します。");
+                location.reload();
+                
+            } catch (error) {
+                console.error("インポートエラー", error);
+                alert("ファイルの読み込みに失敗しました。正しいバックアップファイルか確認してください。");
+            }
+            importInput.value = ""; // 読み込み終了後にリセット
+        };
+        reader.readAsText(file);
+    });
 }
