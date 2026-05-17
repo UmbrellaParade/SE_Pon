@@ -374,64 +374,6 @@ function initMemo() {
     });
 }
 
-async function initBackground() {
-    const bgInput = document.getElementById('bg-image-input');
-    const clearBgBtn = document.getElementById('clear-bg-btn');
-
-    const applyBackground = (file) => {
-        if (file) {
-            const objectUrl = URL.createObjectURL(file);
-            document.body.style.backgroundImage = `url('${objectUrl}')`;
-        } else {
-            document.body.style.backgroundImage = 'none';
-        }
-    };
-
-    // DBから画像を読み込む（DB初期化後に呼ばれる前提）
-    const loadBgFromDB = () => {
-        return new Promise((resolve) => {
-            if (!db) return resolve(null);
-            const tx = db.transaction([STORE_NAME_AUDIO], 'readonly');
-            const req = tx.objectStore(STORE_NAME_AUDIO).get('bg-image');
-            req.onsuccess = () => {
-                if (req.result && req.result.file) {
-                    resolve(req.result.file);
-                } else {
-                    resolve(null);
-                }
-            };
-            req.onerror = () => resolve(null);
-        });
-    };
-
-    const savedFile = await loadBgFromDB();
-    if (savedFile) {
-        applyBackground(savedFile);
-    }
-
-    if (bgInput) {
-        bgInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            // IndexedDBのaudioDataストアを間借りして保存
-            saveData('bg-image', file, file.name, 1, false, 1);
-            applyBackground(file);
-        });
-    }
-
-    if (clearBgBtn) {
-        clearBgBtn.addEventListener('click', () => {
-            if (db) {
-                const tx = db.transaction([STORE_NAME_AUDIO], 'readwrite');
-                tx.objectStore(STORE_NAME_AUDIO).delete('bg-image');
-            }
-            applyBackground(null);
-            if (bgInput) bgInput.value = "";
-        });
-    }
-}
-
 const DEFAULT_SECTIONS = [
   { id: "bgm", title: "🎵 曲・BGM", style: "bgm", order: 1, isCollapsed: false },
   { id: "jingle1", title: "📢 ジングル・CM", style: "bgm", order: 2, isCollapsed: false },
@@ -443,7 +385,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     initMemo(); // メモ機能の初期化
     try {
         await initDB();
-        await initBackground(); // 背景画像の初期化 (DB初期化後に呼ぶ)
         sections = await getAllSections();
         if (sections.length === 0) {
             sections = DEFAULT_SECTIONS;

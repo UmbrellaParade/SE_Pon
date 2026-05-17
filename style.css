@@ -13,23 +13,9 @@ body {
     margin: 0;
     padding: 0;
     background-color: #121212;
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    background-repeat: no-repeat;
     color: var(--text-color);
     position: relative;
     min-height: 100vh;
-}
-
-/* 登録した背景画像をうっすら見せるための黒半透明フィルター */
-body::before {
-    content: '';
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-color: rgba(18, 18, 18, 0.85); /* 0.85=かなり暗め。うっすら透ける */
-    z-index: -1;
-    pointer-events: none;
 }
 
 .container {
