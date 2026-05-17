@@ -531,6 +531,7 @@ function appendSectionDOM(sec, savedAudioData) {
                     <span class="section-title-text" style="cursor:pointer; text-decoration:underline dashed; text-underline-offset:4px;" title="クリックして名前を変更">${sec.title}</span>
                     <button class="edit-title-btn" style="background:none; border:none; cursor:pointer; font-size:0.8em;" title="名前を変更">✏️</button>
                 </h2>
+                <button class="add-btn" style="background:#4CAF50; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; white-space:nowrap; margin-left:10px; font-size:0.9em;">+ 新しい枠を追加</button>
             </div>
             <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; justify-content:flex-end;">
                 <label style="font-size:0.9em; display:flex; align-items:center;">
@@ -541,7 +542,6 @@ function appendSectionDOM(sec, savedAudioData) {
                     <input type="checkbox" class="overlap-play-check" ${overlapPlayStates[sec.id] ? 'checked' : ''} style="margin-right:3px;">
                     重ねて再生
                 </label>
-                <button class="add-btn" style="background:#4CAF50; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; white-space:nowrap;">+ 新しい枠を追加</button>
                 <button class="delete-sec-btn" data-sec="${sec.id}" style="background:none; border:none; color:#ff5555; cursor:pointer; font-size:0.85em; text-decoration:underline; white-space:nowrap;">🗑️ 欄ごと削除</button>
             </div>
         </div>
