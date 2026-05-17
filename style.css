@@ -1,0 +1,172 @@
+:root {
+    --bg-color: #121212;
+    --text-color: #e0e0e0;
+    --pad-bg: #2a2a2a;
+    --pad-hover: #3a3a3a;
+    --pad-active: #4CAF50;
+    --accent-color: #00bcd4;
+    --border-radius: 12px;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+h1 {
+    color: var(--accent-color);
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+h2 {
+    border-bottom: 2px solid var(--accent-color);
+    padding-bottom: 10px;
+    margin-top: 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.add-btn {
+    background-color: transparent;
+    color: var(--accent-color);
+    border: 1px solid var(--accent-color);
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.add-btn:hover {
+    background-color: var(--accent-color);
+    color: #121212;
+}
+
+.grid-container {
+    display: grid;
+    gap: 20px;
+    margin-bottom: 40px;
+}
+
+.bgm-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+.pad-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.sound-item {
+    background-color: var(--pad-bg);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    border: 2px solid transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+.sound-item:hover {
+    background-color: var(--pad-hover);
+}
+
+.sound-item.playing {
+    border-color: var(--pad-active);
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.4);
+}
+
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.file-input {
+    font-size: 0.85rem;
+    width: 100%;
+    color: #aaa;
+}
+
+.controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+button {
+    background-color: #444;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    flex: 1;
+    font-size: 0.9rem;
+    transition: background-color 0.2s;
+}
+
+button:hover {
+    background-color: #555;
+}
+
+.play-btn {
+    background-color: #2e7d32;
+    font-weight: bold;
+}
+
+.play-btn:hover {
+    background-color: #388e3c;
+}
+
+.stop-btn {
+    background-color: #c62828;
+}
+
+.stop-btn:hover {
+    background-color: #d32f2f;
+}
+
+.active-btn {
+    background-color: #f39c12 !important;
+    color: #121212 !important;
+    font-weight: bold;
+}
+
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    background-color: #222;
+    padding: 8px 12px;
+    border-radius: 20px;
+}
+
+input[type="range"] {
+    flex: 1;
+    cursor: pointer;
+}
+
+/* ポン出しパッド特有のスタイル */
+.pad-item .play-btn {
+    height: 70px;
+    font-size: 1.3rem;
+}

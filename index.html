@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webポン出しアプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Webポン出しアプリ</h1>
+            <p>パソコンに入っている音声ファイルを選択して再生できます。オンライン・オフライン両対応です。</p>
+        </header>
+
+        <main>
+            <!-- BGM（曲）セクション -->
+            <section id="bgm-section">
+                <h2>🎵 曲・BGM <button id="add-bgm-btn" class="add-btn">+ 増やす</button></h2>
+                <div id="bgm-container" class="grid-container bgm-grid">
+                    <!-- JSで20個生成されます -->
+                </div>
+            </section>
+
+            <!-- ジングル・CMセクション -->
+            <section id="jingle-section">
+                <h2>📢 ジングル・CM <button id="add-jingle-btn" class="add-btn">+ 増やす</button></h2>
+                <div id="jingle-container" class="grid-container pad-grid">
+                    <!-- JSで10個生成されます -->
+                </div>
+            </section>
+
+            <!-- 効果音セクション -->
+            <section id="se-section">
+                <h2>💥 効果音 (SE) <button id="add-se-btn" class="add-btn">+ 増やす</button></h2>
+                <div id="se-container" class="grid-container pad-grid">
+                    <!-- JSで10個生成されます -->
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
