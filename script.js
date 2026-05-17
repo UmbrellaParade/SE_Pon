@@ -473,12 +473,12 @@ function appendSectionDOM(sec, savedAudioData) {
                     <button class="edit-title-btn" style="background:none; border:none; cursor:pointer; font-size:0.8em;" title="名前を変更">✏️</button>
                 </h2>
                 <button class="add-btn" style="background:#4CAF50; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; white-space:nowrap; margin-left:10px; font-size:0.9em;">+ 新しい枠を追加</button>
-            </div>
-            <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; justify-content:flex-end;">
                 <label style="font-size:0.9em; display:flex; align-items:center;">
                     <input type="checkbox" class="auto-play-check" ${autoPlayStates[sec.id] ? 'checked' : ''} style="margin-right:3px;">
                     連続再生
                 </label>
+            </div>
+            <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; justify-content:flex-end;">
                 <label style="font-size:0.9em; display:flex; align-items:center;" title="チェックを入れると他の音を止めずに重ねて鳴らします">
                     <input type="checkbox" class="overlap-play-check" ${overlapPlayStates[sec.id] ? 'checked' : ''} style="margin-right:3px;">
                     重ねて再生
@@ -595,15 +595,12 @@ function appendSectionDOM(sec, savedAudioData) {
 
 // 枠（アイテム）のタイトルをセクション名に合わせて一括更新する関数
 function updateItemTitles(secId) {
-    const secInfo = sections.find(s => s.id === secId);
-    if (!secInfo) return;
-    const secTitleBase = secInfo.title.replace(/（.*）/, '').trim();
     const items = document.querySelectorAll(`.${secId}-item`);
     items.forEach(item => {
         const idx = item.dataset.index;
         const titleEl = item.querySelector('.item-title');
         if (titleEl) {
-            titleEl.textContent = `${secTitleBase} ${idx}`;
+            titleEl.textContent = `${idx}`;
         }
     });
 }
@@ -694,9 +691,7 @@ function createItem(index, secId, style, container, initialData = null) {
         audio.src = URL.createObjectURL(currentFile);
     }
 
-    const secInfo = sections.find(s => s.id === secId);
-    const secTitleBase = secInfo ? secInfo.title.replace(/（.*）/, '').trim() : 'アイテム';
-    let titleText = `${secTitleBase} ${index}`;
+    let titleText = `${index}`;
 
     let mcHtml = '';
     let mcBtnHtml = '';
@@ -756,7 +751,7 @@ function createItem(index, secId, style, container, initialData = null) {
     item.saveCurrentState = (newIndex) => {
         index = newIndex;
         item.dataset.index = newIndex;
-        item.querySelector('.item-title').textContent = `${secTitleBase} ${newIndex}`;
+        item.querySelector('.item-title').textContent = `${newIndex}`;
         updateDB();
     };
 
