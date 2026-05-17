@@ -391,8 +391,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             sections.forEach(s => saveSection(s.id, s.title, s.style, s.order, s.isCollapsed));
         }
 
+        // 既存アイテムの音量を75%に一括更新（初回のみ）
+        const VOLUME_MIGRATION_KEY = 'pondashi_volume_migration_v1';
+        if (!localStorage.getItem(VOLUME_MIGRATION_KEY)) {
+            const allData = await getAllData();
+            allData.forEach(data => {
+                saveData(data.id, data.file, data.fileName, 0.75, data.loop, data.mcVolume);
+            });
+            localStorage.setItem(VOLUME_MIGRATION_KEY, '1');
+        }
+
         const savedAudioData = await getAllData();
-        
+
         sections.forEach(sec => {
             sectionCounts[sec.id] = 0;
             autoPlayStates[sec.id] = false;
@@ -681,7 +691,7 @@ function createItem(index, secId, style, container, initialData = null) {
     const audio = new Audio();
     let fadeInterval;
     let isMCMode = false;
-    let baseVolume = initialData?.volume !== undefined ? initialData.volume : 0.5;
+    let baseVolume = initialData?.volume !== undefined ? initialData.volume : 0.75;
     let mcVolume = initialData?.mcVolume !== undefined ? initialData.mcVolume : 0.1;
     let currentFile = initialData?.file || null;
     let currentFileName = initialData?.fileName || 'ファイル未選択';
