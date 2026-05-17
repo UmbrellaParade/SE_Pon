@@ -445,8 +445,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             sectionCounts[newId] = 0;
             autoPlayStates[newId] = false;
             saveSection(newId, title, 'bgm', newOrder, false);
-            
+
             appendSectionDOM(newSec, []);
+            updateSectionNav();
         });
 
         document.getElementById('add-se-section-btn').addEventListener('click', async () => {
@@ -464,6 +465,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             saveSection(newId, title, 'pad', newOrder, false);
 
             appendSectionDOM(newSec, []);
+            updateSectionNav();
         });
 
         initDataTransfer(); // データ引き継ぎ機能の初期化
@@ -473,12 +475,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+function updateSectionNav() {
+    const nav = document.getElementById('section-nav');
+    if (!nav) return;
+    nav.innerHTML = '';
+    sections.forEach(sec => {
+        const btn = document.createElement('button');
+        btn.textContent = sec.title;
+        btn.style.cssText = 'padding: 4px 14px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 20px; cursor: pointer; font-size: 0.85em; white-space: nowrap; transition: background 0.2s;';
+        btn.addEventListener('mouseover', () => btn.style.background = '#3a3a3a');
+        btn.addEventListener('mouseout', () => btn.style.background = '#2a2a2a');
+        btn.addEventListener('click', () => {
+            const target = document.getElementById(`${sec.id}-section`);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        nav.appendChild(btn);
+    });
+}
+
 function renderAllSections(savedAudioData) {
     const container = document.getElementById('sections-container');
     container.innerHTML = '';
     sections.forEach(sec => {
         appendSectionDOM(sec, savedAudioData);
     });
+    updateSectionNav();
 }
 
 function appendSectionDOM(sec, savedAudioData) {
@@ -530,6 +551,7 @@ function appendSectionDOM(sec, savedAudioData) {
             sectionEl.querySelector('.section-title-text').textContent = sec.title;
             saveSection(sec.id, sec.title, sec.style, sec.order, sec.isCollapsed);
             updateItemTitles(sec.id);
+            updateSectionNav();
         }
     };
     sectionEl.querySelector('.section-title-text').addEventListener('click', editTitleHandler);
@@ -573,6 +595,7 @@ function appendSectionDOM(sec, savedAudioData) {
             delete sectionCounts[sec.id];
             delete autoPlayStates[sec.id];
             sectionEl.remove();
+            updateSectionNav();
         }
     });
 
@@ -592,6 +615,7 @@ function appendSectionDOM(sec, savedAudioData) {
             saveSection(sections[index - 1].id, sections[index - 1].title, sections[index - 1].style, sections[index - 1].order, sections[index - 1].isCollapsed);
 
             mainContainer.insertBefore(sectionEl, sectionEl.previousElementSibling);
+            updateSectionNav();
         }
     });
 
@@ -611,6 +635,7 @@ function appendSectionDOM(sec, savedAudioData) {
             saveSection(sections[index + 1].id, sections[index + 1].title, sections[index + 1].style, sections[index + 1].order, sections[index + 1].isCollapsed);
 
             mainContainer.insertBefore(sectionEl.nextElementSibling, sectionEl);
+            updateSectionNav();
         }
     });
 
