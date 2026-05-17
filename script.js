@@ -96,6 +96,141 @@ let templates = [];
 const MEMO_STORAGE_KEY = 'pondashi_current_memo';
 const TEMPLATE_STORAGE_KEY = 'pondashi_templates';
 
+// --- カスタムプロンプト（Electron・デスクトップ版対応用） ---
+function customPrompt(message, defaultValue = '') {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        overlay.style.zIndex = '9999';
+        overlay.style.display = 'flex';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+
+        const modal = document.createElement('div');
+        modal.style.backgroundColor = '#2a2a2a';
+        modal.style.padding = '20px';
+        modal.style.borderRadius = '8px';
+        modal.style.boxShadow = '0 4px 10px rgba(0,0,0,0.5)';
+        modal.style.width = '400px';
+        modal.style.maxWidth = '90%';
+        modal.style.color = '#fff';
+        modal.style.fontFamily = 'inherit';
+
+        const msgEl = document.createElement('div');
+        msgEl.innerText = message;
+        msgEl.style.marginBottom = '15px';
+        msgEl.style.lineHeight = '1.4';
+        modal.appendChild(msgEl);
+
+        const inputEl = document.createElement('input');
+        inputEl.type = 'text';
+        inputEl.value = defaultValue;
+        inputEl.style.width = '100%';
+        inputEl.style.padding = '8px';
+        inputEl.style.boxSizing = 'border-box';
+        inputEl.style.marginBottom = '20px';
+        inputEl.style.backgroundColor = '#111';
+        inputEl.style.color = '#fff';
+        inputEl.style.border = '1px solid #555';
+        inputEl.style.borderRadius = '4px';
+        inputEl.style.fontSize = '1em';
+        modal.appendChild(inputEl);
+
+        const btnArea = document.createElement('div');
+        btnArea.style.display = 'flex';
+        btnArea.style.justifyContent = 'flex-end';
+        btnArea.style.gap = '10px';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.innerText = 'キャンセル';
+        cancelBtn.style.padding = '8px 16px';
+        cancelBtn.style.cursor = 'pointer';
+        cancelBtn.style.backgroundColor = '#555';
+        cancelBtn.style.color = '#fff';
+        cancelBtn.style.border = 'none';
+        cancelBtn.style.borderRadius = '4px';
+        
+        const okBtn = document.createElement('button');
+        okBtn.innerText = 'OK';
+        okBtn.style.padding = '8px 16px';
+        okBtn.style.cursor = 'pointer';
+        okBtn.style.backgroundColor = '#4CAF50';
+        okBtn.style.color = '#fff';
+        okBtn.style.border = 'none';
+        okBtn.style.borderRadius = '4px';
+
+        btnArea.appendChild(cancelBtn);
+        btnArea.appendChild(okBtn);
+        modal.appendChild(btnArea);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        inputEl.focus();
+        inputEl.select();
+
+        const close = (val) => {
+            if(document.body.contains(overlay)) {
+                document.body.removeChild(overlay);
+            }
+            resolve(val);
+        };
+
+        cancelBtn.addEventListener('click', () => close(null));
+        okBtn.addEventListener('click', () => close(inputEl.value));
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') close(inputEl.value);
+            if (e.key === 'Escape') close(null);
+        });
+    });
+}
+
+function customAlert(message) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed'; overlay.style.top = '0'; overlay.style.left = '0'; overlay.style.width = '100vw'; overlay.style.height = '100vh'; overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)'; overlay.style.zIndex = '9999'; overlay.style.display = 'flex'; overlay.style.justifyContent = 'center'; overlay.style.alignItems = 'center';
+        const modal = document.createElement('div');
+        modal.style.backgroundColor = '#2a2a2a'; modal.style.padding = '20px'; modal.style.borderRadius = '8px'; modal.style.boxShadow = '0 4px 10px rgba(0,0,0,0.5)'; modal.style.width = '400px'; modal.style.maxWidth = '90%'; modal.style.color = '#fff'; modal.style.fontFamily = 'inherit';
+        const msgEl = document.createElement('div');
+        msgEl.innerText = message; msgEl.style.marginBottom = '20px'; msgEl.style.lineHeight = '1.4';
+        modal.appendChild(msgEl);
+        const btnArea = document.createElement('div');
+        btnArea.style.display = 'flex'; btnArea.style.justifyContent = 'flex-end';
+        const okBtn = document.createElement('button');
+        okBtn.innerText = 'OK'; okBtn.style.padding = '8px 16px'; okBtn.style.cursor = 'pointer'; okBtn.style.backgroundColor = '#4CAF50'; okBtn.style.color = '#fff'; okBtn.style.border = 'none'; okBtn.style.borderRadius = '4px';
+        btnArea.appendChild(okBtn); modal.appendChild(btnArea); overlay.appendChild(modal); document.body.appendChild(overlay);
+        okBtn.focus();
+        const close = () => { if(document.body.contains(overlay)) document.body.removeChild(overlay); resolve(); };
+        okBtn.addEventListener('click', close);
+    });
+}
+
+function customConfirm(message) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed'; overlay.style.top = '0'; overlay.style.left = '0'; overlay.style.width = '100vw'; overlay.style.height = '100vh'; overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)'; overlay.style.zIndex = '9999'; overlay.style.display = 'flex'; overlay.style.justifyContent = 'center'; overlay.style.alignItems = 'center';
+        const modal = document.createElement('div');
+        modal.style.backgroundColor = '#2a2a2a'; modal.style.padding = '20px'; modal.style.borderRadius = '8px'; modal.style.boxShadow = '0 4px 10px rgba(0,0,0,0.5)'; modal.style.width = '400px'; modal.style.maxWidth = '90%'; modal.style.color = '#fff'; modal.style.fontFamily = 'inherit';
+        const msgEl = document.createElement('div');
+        msgEl.innerText = message; msgEl.style.marginBottom = '20px'; msgEl.style.lineHeight = '1.4';
+        modal.appendChild(msgEl);
+        const btnArea = document.createElement('div');
+        btnArea.style.display = 'flex'; btnArea.style.justifyContent = 'flex-end'; btnArea.style.gap = '10px';
+        const cancelBtn = document.createElement('button');
+        cancelBtn.innerText = 'キャンセル'; cancelBtn.style.padding = '8px 16px'; cancelBtn.style.cursor = 'pointer'; cancelBtn.style.backgroundColor = '#555'; cancelBtn.style.color = '#fff'; cancelBtn.style.border = 'none'; cancelBtn.style.borderRadius = '4px';
+        const okBtn = document.createElement('button');
+        okBtn.innerText = 'OK'; okBtn.style.padding = '8px 16px'; okBtn.style.cursor = 'pointer'; okBtn.style.backgroundColor = '#4CAF50'; okBtn.style.color = '#fff'; okBtn.style.border = 'none'; okBtn.style.borderRadius = '4px';
+        btnArea.appendChild(cancelBtn); btnArea.appendChild(okBtn); modal.appendChild(btnArea); overlay.appendChild(modal); document.body.appendChild(overlay);
+        const close = (val) => { if(document.body.contains(overlay)) document.body.removeChild(overlay); resolve(val); };
+        cancelBtn.addEventListener('click', () => close(false));
+        okBtn.addEventListener('click', () => close(true));
+    });
+}
+
 function initMemo() {
     const memoArea = document.getElementById('memo-area');
     const templateSelect = document.getElementById('template-select');
@@ -137,21 +272,24 @@ function initMemo() {
     renderTemplateOptions();
 
     // 読み込み
-    loadBtn.addEventListener('click', () => {
+    loadBtn.addEventListener('click', async () => {
         const id = templateSelect.value;
-        if (!id) return alert('読み込むテンプレートを選択してください。');
+        if (!id) { await customAlert('読み込むテンプレートを選択してください。'); return; }
         const t = templates.find(x => x.id === id);
         if (t) {
-            if (memoArea.value.trim() !== '' && !confirm('現在のメモが上書きされます。よろしいですか？')) return;
+            if (memoArea.value.trim() !== '') {
+                const ok = await customConfirm('現在のメモが上書きされます。よろしいですか？');
+                if (!ok) return;
+            }
             memoArea.value = t.content;
             localStorage.setItem(MEMO_STORAGE_KEY, memoArea.value);
         }
     });
 
     // 新規保存
-    saveBtn.addEventListener('click', () => {
-        if (memoArea.value.trim() === '') return alert('メモが空です。保存する内容を入力してください。');
-        const name = prompt('新しいテンプレートの名前を入力してください\n（例: 雑談枠用、ゲーム配信枠用 など）');
+    saveBtn.addEventListener('click', async () => {
+        if (memoArea.value.trim() === '') { await customAlert('メモが空です。保存する内容を入力してください。'); return; }
+        const name = await customPrompt('新しいテンプレートの名前を入力してください\n（例: 雑談枠用、ゲーム配信枠用 など）');
         if (!name || name.trim() === '') return;
         
         const newTemplate = {
@@ -163,47 +301,49 @@ function initMemo() {
         localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
         renderTemplateOptions();
         templateSelect.value = newTemplate.id;
-        alert(`テンプレート「${newTemplate.name}」を保存しました！`);
+        await customAlert(`テンプレート「${newTemplate.name}」を保存しました！`);
     });
 
     // 上書き保存
-    updateBtn.addEventListener('click', () => {
+    updateBtn.addEventListener('click', async () => {
         const id = templateSelect.value;
-        if (!id) return alert('上書きするテンプレートをプルダウンから選択してください。');
-        if (memoArea.value.trim() === '') return alert('メモが空です。');
+        if (!id) { await customAlert('上書きするテンプレートをプルダウンから選択してください。'); return; }
+        if (memoArea.value.trim() === '') { await customAlert('メモが空です。'); return; }
         
         const t = templates.find(x => x.id === id);
-        if (t && confirm(`「${t.name}」を現在のメモ内容で上書きしますか？`)) {
-            t.content = memoArea.value;
-            localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
-            alert('上書き保存しました！');
+        if (t) {
+            const ok = await customConfirm(`「${t.name}」を現在のメモ内容で上書きしますか？`);
+            if (ok) {
+                t.content = memoArea.value;
+                localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+                await customAlert('上書き保存しました！');
+            }
         }
     });
 
     // 削除
-    deleteBtn.addEventListener('click', () => {
+    deleteBtn.addEventListener('click', async () => {
         const id = templateSelect.value;
-        if (!id) return alert('削除するテンプレートを選択してください。');
+        if (!id) { await customAlert('削除するテンプレートを選択してください。'); return; }
         
         const t = templates.find(x => x.id === id);
-        if (t && confirm(`本当にテンプレート「${t.name}」を削除しますか？`)) {
-            templates = templates.filter(x => x.id !== id);
-            localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
-            renderTemplateOptions();
-            alert('テンプレートを削除しました。');
+        if (t) {
+            const ok = await customConfirm(`本当にテンプレート「${t.name}」を削除しますか？`);
+            if (ok) {
+                templates = templates.filter(x => x.id !== id);
+                localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+                renderTemplateOptions();
+                await customAlert('テンプレートを削除しました。');
+            }
         }
     });
 }
 
 const DEFAULT_SECTIONS = [
   { id: "bgm", title: "🎵 曲・BGM", style: "bgm", order: 1, isCollapsed: false },
-  { id: "jingle1", title: "📢 ジングル・CM 1", style: "bgm", order: 2, isCollapsed: false },
-  { id: "jingle2", title: "📢 ジングル・CM 2", style: "bgm", order: 3, isCollapsed: false },
-  { id: "se", title: "💥 効果音 (SE)", style: "pad", order: 4, isCollapsed: false },
-  { id: "originalOke", title: "🎤 オリジナルオケ", style: "bgm", order: 5, isCollapsed: false },
-  { id: "coverOke", title: "🎤 カバーオケ", style: "bgm", order: 6, isCollapsed: false },
-  { id: "jingleOther", title: "📢 CMその他（緊急用等）", style: "bgm", order: 7, isCollapsed: false },
-  { id: "other", title: "🎵 その他（緊急用等）", style: "bgm", order: 8, isCollapsed: false }
+  { id: "jingle1", title: "📢 ジングル・CM", style: "bgm", order: 2, isCollapsed: false },
+  { id: "se", title: "💥 効果音", style: "pad", order: 3, isCollapsed: false },
+  { id: "other", title: "🎵 その他", style: "bgm", order: 4, isCollapsed: false }
 ];
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -234,8 +374,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         renderAllSections(savedAudioData);
 
-        document.getElementById('add-section-btn').addEventListener('click', () => {
-            const title = prompt("新しい欄の名前を入力してください\n（例: 「🎤 ゲスト用BGM」「📢 特殊効果音」など）");
+        document.getElementById('add-section-btn').addEventListener('click', async () => {
+            const title = await customPrompt("新しい欄の名前を入力してください\n（例: 「🎤 ゲスト用BGM」「📢 特殊効果音」など）");
             if (!title || title.trim() === '') return;
             
             const newId = 'custom_' + Date.now();
@@ -299,8 +439,8 @@ function appendSectionDOM(sec, savedAudioData) {
     const toggleBtn = sectionEl.querySelector('.collapse-toggle');
 
     // タイトル編集イベント
-    const editTitleHandler = () => {
-        const newTitle = prompt("欄の新しい名前を入力してください", sec.title);
+    const editTitleHandler = async () => {
+        const newTitle = await customPrompt("欄の新しい名前を入力してください", sec.title);
         if (newTitle !== null && newTitle.trim() !== "") {
             sec.title = newTitle.trim();
             sectionEl.querySelector('.section-title-text').textContent = sec.title;
@@ -336,7 +476,8 @@ function appendSectionDOM(sec, savedAudioData) {
     });
 
     sectionEl.querySelector('.delete-sec-btn').addEventListener('click', async () => {
-        if (confirm(`本当に「${sec.title}」の欄を削除しますか？\nセットされている音声データもすべて消去されます。`)) {
+        const ok = await customConfirm(`本当に「${sec.title}」の欄を削除しますか？\nセットされている音声データもすべて消去されます。`);
+        if (ok) {
             await clearDataByType(sec.id);
             deleteSectionFromDB(sec.id);
             sections = sections.filter(s => s.id !== sec.id);
@@ -558,7 +699,8 @@ function createItem(index, secId, style, container, initialData = null) {
     };
 
     deleteBtn.addEventListener('click', async () => {
-        if (confirm('この枠を削除しますか？')) {
+        const ok = await customConfirm('この枠を削除しますか？');
+        if (ok) {
             clearInterval(fadeInterval);
             audio.pause();
             item.remove();
@@ -621,8 +763,8 @@ function createItem(index, secId, style, container, initialData = null) {
         }
     });
 
-    playBtn.addEventListener('click', () => {
-        if (!audio.src || !currentFile) return alert("音声ファイルを選択してください。");
+    playBtn.addEventListener('click', async () => {
+        if (!audio.src || !currentFile) return await customAlert("音声ファイルを選択してください。");
         clearInterval(fadeInterval);
         isMCMode = false;
         if (mcBtn) mcBtn.classList.remove('active-btn');
@@ -637,8 +779,8 @@ function createItem(index, secId, style, container, initialData = null) {
         audio.currentTime = 0;
     });
 
-    fadeInBtn.addEventListener('click', () => {
-        if (!audio.src || !currentFile) return alert("音声ファイルを選択してください。");
+    fadeInBtn.addEventListener('click', async () => {
+        if (!audio.src || !currentFile) return await customAlert("音声ファイルを選択してください。");
         clearInterval(fadeInterval);
         audio.volume = 0;
         audio.play().catch(console.error);
@@ -778,7 +920,7 @@ function initDataTransfer() {
             
         } catch (e) {
             console.error("エクスポートエラー", e);
-            alert("データの書き出しに失敗しました。ファイルが大きすぎる可能性があります。");
+            await customAlert("データの書き出しに失敗しました。ファイルが大きすぎる可能性があります。");
         } finally {
             exportBtn.textContent = "書き出し";
             exportBtn.disabled = false;
@@ -804,7 +946,8 @@ function initDataTransfer() {
                     throw new Error("無効なファイルフォーマットです。");
                 }
 
-                if (!confirm("現在の設定や欄はすべて上書きされます。よろしいですか？\n※音声データが含まれる場合、復元に数秒かかることがあります。")) {
+                const ok = await customConfirm("現在の設定や欄はすべて上書きされます。よろしいですか？\n※音声データが含まれる場合、復元に数秒かかることがあります。");
+                if (!ok) {
                     importInput.value = "";
                     labelEl.innerHTML = originalText;
                     return;
@@ -867,12 +1010,12 @@ function initDataTransfer() {
                     localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(importedObj.templates));
                 }
 
-                alert("データの読み込みが完了しました！\n画面を更新します。");
+                await customAlert("データの読み込みが完了しました！\n画面を更新します。");
                 location.reload();
                 
             } catch (error) {
                 console.error("インポートエラー", error);
-                alert("ファイルの読み込みに失敗しました。ファイルが大きすぎるか、破損しています。");
+                await customAlert("ファイルの読み込みに失敗しました。ファイルが大きすぎるか、破損しています。");
                 labelEl.innerHTML = originalText;
             }
             importInput.value = "";
