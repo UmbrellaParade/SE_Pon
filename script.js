@@ -514,9 +514,9 @@ function updateSectionNav() {
         if (navVisibilityStates[sec.id] === false) return;
         const btn = document.createElement('button');
         btn.textContent = sec.title;
-        btn.style.cssText = 'padding: 4px 14px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 20px; cursor: pointer; font-size: 0.85em; white-space: nowrap; transition: background 0.2s;';
-        btn.addEventListener('mouseover', () => btn.style.background = '#3a3a3a');
-        btn.addEventListener('mouseout', () => btn.style.background = '#2a2a2a');
+        btn.style.cssText = 'padding: 4px 14px; background: #1a3040; color: #80deea; border: 1px solid #2a7a8a; border-radius: 20px; cursor: pointer; font-size: 0.85em; white-space: nowrap; transition: background 0.2s, border-color 0.2s;';
+        btn.addEventListener('mouseover', () => { btn.style.background = '#224455'; btn.style.borderColor = '#00bcd4'; });
+        btn.addEventListener('mouseout', () => { btn.style.background = '#1a3040'; btn.style.borderColor = '#2a7a8a'; });
         btn.addEventListener('click', () => {
             const target = document.getElementById(`${sec.id}-section`);
             if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
