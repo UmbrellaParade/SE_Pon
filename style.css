@@ -170,3 +170,25 @@ input[type="range"] {
     height: 70px;
     font-size: 1.3rem;
 }
+
+.sound-item.dragging {
+    opacity: 0.5;
+    transform: scale(0.98);
+}
+
+.sound-item.drag-over {
+    border: 2px dashed var(--accent-color, #00bcd4);
+    box-sizing: border-box;
+}
+
+/* セクションのドラッグ＆ドロップ用スタイル */
+.section-dragging {
+    opacity: 0.4;
+    background-color: #2a2a2a;
+    border-radius: 8px;
+}
+
+.section-drag-over {
+    border-top: 4px dashed var(--accent-color, #00bcd4);
+    padding-top: 10px;
+}

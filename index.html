@@ -5,39 +5,100 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Webポン出しアプリ</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* レイアウト用のスタイル調整 */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        .app-layout {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1800px;
+            margin: 0 auto;
+            align-items: flex-start;
+        }
+        .sidebar {
+            width: 320px;
+            flex-shrink: 0;
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            position: sticky;
+            top: 20px;
+            height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+        .main-container {
+            flex-grow: 1;
+            margin: 0;
+            max-width: none;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* テンプレートボタンのホバーエフェクト */
+        .tpl-btn {
+            transition: filter 0.2s;
+        }
+        .tpl-btn:hover {
+            filter: brightness(1.2);
+        }
+        .tpl-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Webポン出しアプリ</h1>
-            <p>パソコンに入っている音声ファイルを選択して再生できます。オンライン・オフライン両対応です。</p>
-        </header>
-
-        <main>
-            <!-- BGM（曲）セクション -->
-            <section id="bgm-section">
-                <h2>🎵 曲・BGM <button id="add-bgm-btn" class="add-btn">+ 増やす</button></h2>
-                <div id="bgm-container" class="grid-container bgm-grid">
-                    <!-- JSで20個生成されます -->
+    <div class="app-layout">
+        <!-- 左側サイドバー（メモ＆テンプレート） -->
+        <aside class="sidebar">
+            <h2 style="margin-top: 0; font-size: 1.2em; border-bottom: 1px solid #444; padding-bottom: 10px;">📝 配信の段取りメモ</h2>
+            
+            <div class="template-controls" style="margin-bottom: 15px; background: #1e1e1e; padding: 10px; border-radius: 8px; border: 1px solid #333;">
+                <div style="font-size: 0.8em; color: #aaa; margin-bottom: 5px;">📑 テンプレート</div>
+                <select id="template-select" style="width: 100%; padding: 6px; margin-bottom: 8px; background: #333; color: white; border: 1px solid #555; border-radius: 4px;">
+                    <option value="">-- テンプレートを選択 --</option>
+                </select>
+                <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                    <button id="load-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #444; color: white; border: none; border-radius: 4px; font-size: 0.9em;">読込</button>
+                    <button id="save-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px; font-size: 0.9em;">新規保存</button>
                 </div>
-            </section>
-
-            <!-- ジングル・CMセクション -->
-            <section id="jingle-section">
-                <h2>📢 ジングル・CM <button id="add-jingle-btn" class="add-btn">+ 増やす</button></h2>
-                <div id="jingle-container" class="grid-container pad-grid">
-                    <!-- JSで10個生成されます -->
+                <div style="display: flex; gap: 5px;">
+                    <button id="update-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #2196F3; color: white; border: none; border-radius: 4px; font-size: 0.9em;">上書き</button>
+                    <button id="delete-template-btn" class="tpl-btn" style="flex: 1; padding: 6px; cursor: pointer; background: #f44336; color: white; border: none; border-radius: 4px; font-size: 0.9em;">削除</button>
                 </div>
-            </section>
+            </div>
 
-            <!-- 効果音セクション -->
-            <section id="se-section">
-                <h2>💥 効果音 (SE) <button id="add-se-btn" class="add-btn">+ 増やす</button></h2>
-                <div id="se-container" class="grid-container pad-grid">
-                    <!-- JSで10個生成されます -->
+            <textarea id="memo-area" style="flex-grow: 1; resize: none; width: 100%; padding: 12px; font-family: inherit; font-size: 0.95em; background: #1a1a1a; color: #eee; border: 1px solid #444; border-radius: 8px; box-sizing: border-box; line-height: 1.5;" placeholder="ここに配信の流れや段取りを自由にメモできます...&#10;&#10;例：&#10;1. オープニング（BGM 1）&#10;2. 挨拶・本日のテーマ&#10;3. コーナー①（効果音）&#10;..."></textarea>
+        </aside>
+
+        <!-- 右側メインコンテンツ（ポン出しアプリ本体） -->
+        <div class="main-container">
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                <div>
+                    <h1 style="margin-top: 0;">Webポン出しアプリ</h1>
+                    <p style="margin: 5px 0 0 0;">パソコンに入っている音声ファイルを選択して再生できます。オンライン・オフライン両対応です。</p>
                 </div>
-            </section>
-        </main>
+                <div>
+                    <button id="add-section-btn" style="padding: 10px 20px; font-size: 1.1em; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s;">
+                        + 新しい欄を追加
+                    </button>
+                </div>
+            </header>
+
+            <main id="sections-container">
+                <!-- JSで動的にセクションが生成されます -->
+            </main>
+        </div>
     </div>
     <script src="script.js"></script>
 </body>

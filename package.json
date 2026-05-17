@@ -1,0 +1,12 @@
+{
+  "name": "se-pon-desktop",
+  "version": "1.0.0",
+  "description": "ポン出しアプリ デスクトップ版",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^29.0.0"
+  }
+}
