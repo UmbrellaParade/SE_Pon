@@ -734,7 +734,7 @@ function createItem(index, secId, style, container, initialData = null) {
         <div class="item-header" style="display:flex; justify-content:space-between; align-items:center;">
             <span class="item-title">${titleText}</span>
             <div style="display:flex; align-items:center;">
-                <label><input type="checkbox" class="repeat-check" ${audio.loop ? 'checked' : ''}> リピート</label>
+                ${style !== 'pad' ? `<label><input type="checkbox" class="repeat-check" ${audio.loop ? 'checked' : ''}> リピート</label>` : ''}
                 <button class="copy-move-btn" style="margin-left:8px; background:none; border:none; color:#2196F3; cursor:pointer; font-size:1.1em;" title="他の欄へコピー/移動">📋</button>
                 <button class="delete-btn" style="margin-left:8px; background:none; border:none; color:#ff5555; cursor:pointer; font-size:1.1em;" title="この枠を削除">✖</button>
             </div>
@@ -876,10 +876,12 @@ function createItem(index, secId, style, container, initialData = null) {
         }
     });
 
-    repeatCheck.addEventListener('change', (e) => {
-        audio.loop = e.target.checked;
-        updateDB();
-    });
+    if (repeatCheck) {
+        repeatCheck.addEventListener('change', (e) => {
+            audio.loop = e.target.checked;
+            updateDB();
+        });
+    }
 
     volSlider.addEventListener('input', (e) => {
         baseVolume = parseFloat(e.target.value);
