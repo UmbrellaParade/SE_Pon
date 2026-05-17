@@ -90,6 +90,7 @@ function deleteSectionFromDB(id) {
 let sections = [];
 let sectionCounts = {};
 let autoPlayStates = {};
+let overlapPlayStates = {}; // 重ねて再生の設定
 
 // --- メモ＆テンプレート機能 ---
 let templates = [];
@@ -438,6 +439,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             autoPlayStates[sec.id] = false;
         });
 
+        // 重ねて再生の初期値読み込み
+        try {
+            const savedOverlap = localStorage.getItem('pondashi_overlap_states');
+            if (savedOverlap) {
+                overlapPlayStates = JSON.parse(savedOverlap);
+            }
+        } catch(e) {}
+        // デフォルトでは 効果音(se) などは重ねて再生をtrueにする
+        sections.forEach(sec => {
+            if (overlapPlayStates[sec.id] === undefined) {
+                overlapPlayStates[sec.id] = (sec.style === 'pad'); // pad(効果音)はデフォルトtrue
+            }
+        });
+
         savedAudioData.forEach(data => {
             const parts = data.id.split('-');
             const secId = parts[0];
@@ -497,13 +512,20 @@ function appendSectionDOM(sec, savedAudioData) {
                     <span class="collapse-toggle" style="cursor:pointer; display:inline-block; width:24px; text-align:center; font-size:0.9em; user-select:none; opacity:0.8;" title="欄を折りたたむ/開く">${sec.isCollapsed ? '▶' : '▼'}</span>
                     <span class="section-title-text" style="cursor:pointer; text-decoration:underline dashed; text-underline-offset:4px;" title="クリックして名前を変更">${sec.title}</span>
                     <button class="edit-title-btn" style="background:none; border:none; cursor:pointer; font-size:0.8em;" title="名前を変更">✏️</button>
-                    <button class="add-btn" data-sec="${sec.id}" style="padding:4px 8px; font-size:0.8em; margin-left:10px;">+ 枠を増やす</button>
-                    <label style="font-size: 0.7em; font-weight: normal; cursor: pointer; color: var(--text-color); margin-left:10px;" title="この設定は自動保存されません。配信ごとにチェックしてください。">
-                        <input type="checkbox" class="auto-play-check" data-sec="${sec.id}"> 自動連続再生（プレイリスト）
-                    </label>
                 </h2>
             </div>
-            <button class="delete-sec-btn" data-sec="${sec.id}" style="background:none; border:none; color:#ff5555; cursor:pointer; font-size:0.85em; text-decoration:underline; white-space:nowrap;">🗑️ 欄ごと削除</button>
+            <div style="display:flex; align-items:center;">
+                <label style="margin-right:15px; font-size:0.9em; display:flex; align-items:center;">
+                    <input type="checkbox" class="auto-play-check" ${autoPlayStates[sec.id] ? 'checked' : ''} style="margin-right:3px;">
+                    連続再生
+                </label>
+                <label style="margin-right:15px; font-size:0.9em; display:flex; align-items:center;" title="チェックを入れると他の音を止めずに重ねて鳴らします">
+                    <input type="checkbox" class="overlap-play-check" ${overlapPlayStates[sec.id] ? 'checked' : ''} style="margin-right:3px;">
+                    重ねて再生
+                </label>
+                <button class="add-btn" style="background:#4CAF50; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">+ 新しい枠を追加</button>
+                <button class="delete-sec-btn" data-sec="${sec.id}" style="background:none; border:none; color:#ff5555; cursor:pointer; font-size:0.85em; text-decoration:underline; margin-left:10px;">🗑️ 欄ごと削除</button>
+            </div>
         </div>
         <div id="${sec.id}-container" class="grid-container ${sec.style === 'pad' ? 'pad-grid' : 'bgm-grid'}" style="display: ${sec.isCollapsed ? 'none' : 'grid'};">
         </div>
@@ -548,6 +570,11 @@ function appendSectionDOM(sec, savedAudioData) {
 
     sectionEl.querySelector('.auto-play-check').addEventListener('change', (e) => {
         autoPlayStates[sec.id] = e.target.checked;
+    });
+
+    sectionEl.querySelector('.overlap-play-check').addEventListener('change', (e) => {
+        overlapPlayStates[sec.id] = e.target.checked;
+        localStorage.setItem('pondashi_overlap_states', JSON.stringify(overlapPlayStates));
     });
 
     sectionEl.querySelector('.delete-sec-btn').addEventListener('click', async () => {
@@ -784,6 +811,30 @@ function createItem(index, secId, style, container, initialData = null) {
         };
     };
 
+    // 他の音を止めるメソッドと排他制御
+    item.stopAudio = () => {
+        clearInterval(fadeInterval);
+        audio.pause();
+        audio.currentTime = 0;
+    };
+
+    const handleExclusivePlay = () => {
+        if (!overlapPlayStates[secId]) {
+            const allItems = document.querySelectorAll('.sound-item');
+            allItems.forEach(otherItem => {
+                if (otherItem === item) return;
+                const classes = Array.from(otherItem.classList);
+                const secClass = classes.find(c => c.endsWith('-item') && c !== 'sound-item' && c !== 'pad-item');
+                if (secClass) {
+                    const otherSecId = secClass.replace('-item', '');
+                    if (!overlapPlayStates[otherSecId] && otherItem.stopAudio) {
+                        otherItem.stopAudio();
+                    }
+                }
+            });
+        }
+    };
+
     // コピー・移動処理
     const copyMoveBtn = item.querySelector('.copy-move-btn');
     if (copyMoveBtn) {
@@ -804,8 +855,7 @@ function createItem(index, secId, style, container, initialData = null) {
             if (!targetSec) return;
 
             if (action === 'move') {
-                clearInterval(fadeInterval);
-                audio.pause();
+                item.stopAudio();
                 item.remove();
                 await reindexItems(secId);
             }
@@ -827,8 +877,7 @@ function createItem(index, secId, style, container, initialData = null) {
     deleteBtn.addEventListener('click', async () => {
         const ok = await customConfirm('この枠を削除しますか？');
         if (ok) {
-            clearInterval(fadeInterval);
-            audio.pause();
+            item.stopAudio();
             item.remove();
             await reindexItems(secId);
         }
@@ -891,6 +940,7 @@ function createItem(index, secId, style, container, initialData = null) {
 
     playBtn.addEventListener('click', async () => {
         if (!audio.src || !currentFile) return await customAlert("音声ファイルを選択してください。");
+        handleExclusivePlay();
         clearInterval(fadeInterval);
         isMCMode = false;
         if (mcBtn) mcBtn.classList.remove('active-btn');
@@ -900,13 +950,12 @@ function createItem(index, secId, style, container, initialData = null) {
     });
 
     stopBtn.addEventListener('click', () => {
-        clearInterval(fadeInterval);
-        audio.pause();
-        audio.currentTime = 0;
+        item.stopAudio();
     });
 
     fadeInBtn.addEventListener('click', async () => {
         if (!audio.src || !currentFile) return await customAlert("音声ファイルを選択してください。");
+        handleExclusivePlay();
         clearInterval(fadeInterval);
         audio.volume = 0;
         audio.play().catch(console.error);
