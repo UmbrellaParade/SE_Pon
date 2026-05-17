@@ -449,6 +449,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             appendSectionDOM(newSec, []);
         });
 
+        document.getElementById('add-se-section-btn').addEventListener('click', async () => {
+            const title = await customPrompt("効果音の欄の名前を入力してください\n（例: 「💥 効果音①」「🔔 ベル・スイッチ」など）");
+            if (!title || title.trim() === '') return;
+
+            const newId = 'custom_' + Date.now();
+            const newOrder = sections.length > 0 ? Math.max(...sections.map(s => s.order)) + 1 : 1;
+            const newSec = { id: newId, title: title, style: 'pad', order: newOrder, isCollapsed: false };
+
+            sections.push(newSec);
+            sectionCounts[newId] = 0;
+            autoPlayStates[newId] = false;
+            overlapPlayStates[newId] = true;
+            saveSection(newId, title, 'pad', newOrder, false);
+
+            appendSectionDOM(newSec, []);
+        });
+
         initDataTransfer(); // データ引き継ぎ機能の初期化
     } catch (e) {
         console.error("データベースエラー", e);
@@ -735,11 +752,12 @@ function createItem(index, secId, style, container, initialData = null) {
             <button class="play-btn">▶ 再生</button>
             <button class="stop-btn">■ 停止</button>
         </div>
+        ${style !== 'pad' ? `
         <div class="controls">
             <button class="fade-in-btn">↗ フェードイン</button>
             <button class="fade-out-btn">↘ フェードアウト</button>
             ${mcBtnHtml}
-        </div>
+        </div>` : ''}
     `;
 
     const fileInput = item.querySelector('.file-input');
@@ -917,36 +935,40 @@ function createItem(index, secId, style, container, initialData = null) {
         item.stopAudio();
     });
 
-    fadeInBtn.addEventListener('click', async () => {
-        if (!audio.src || !currentFile) return await customAlert("音声ファイルを選択してください。");
-        handleExclusivePlay();
-        clearInterval(fadeInterval);
-        audio.volume = 0;
-        audio.play().catch(console.error);
-        
-        fadeInterval = setInterval(() => {
-            if (audio.volume < baseVolume - 0.05) {
-                audio.volume += 0.05;
-            } else {
-                audio.volume = baseVolume;
-                clearInterval(fadeInterval);
-            }
-        }, 200);
-    });
+    if (fadeInBtn) {
+        fadeInBtn.addEventListener('click', async () => {
+            if (!audio.src || !currentFile) return await customAlert("音声ファイルを選択してください。");
+            handleExclusivePlay();
+            clearInterval(fadeInterval);
+            audio.volume = 0;
+            audio.play().catch(console.error);
 
-    fadeOutBtn.addEventListener('click', () => {
-        clearInterval(fadeInterval);
-        fadeInterval = setInterval(() => {
-            if (audio.volume > 0.05) {
-                audio.volume -= 0.05;
-            } else {
-                audio.volume = 0;
-                audio.pause();
-                audio.currentTime = 0;
-                clearInterval(fadeInterval);
-            }
-        }, 200);
-    });
+            fadeInterval = setInterval(() => {
+                if (audio.volume < baseVolume - 0.05) {
+                    audio.volume += 0.05;
+                } else {
+                    audio.volume = baseVolume;
+                    clearInterval(fadeInterval);
+                }
+            }, 200);
+        });
+    }
+
+    if (fadeOutBtn) {
+        fadeOutBtn.addEventListener('click', () => {
+            clearInterval(fadeInterval);
+            fadeInterval = setInterval(() => {
+                if (audio.volume > 0.05) {
+                    audio.volume -= 0.05;
+                } else {
+                    audio.volume = 0;
+                    audio.pause();
+                    audio.currentTime = 0;
+                    clearInterval(fadeInterval);
+                }
+            }, 200);
+        });
+    }
 
     if (mcBtn) {
         mcBtn.addEventListener('click', () => {

@@ -171,7 +171,8 @@ input[type="range"] {
 /* ポン出しパッド特有のスタイル */
 .pad-item .play-btn {
     height: 70px;
-    font-size: 1.3rem;
+    font-size: 1rem;
+    white-space: nowrap;
 }
 
 .sound-item.dragging {
