@@ -532,17 +532,17 @@ function appendSectionDOM(sec, savedAudioData) {
                     <button class="edit-title-btn" style="background:none; border:none; cursor:pointer; font-size:0.8em;" title="名前を変更">✏️</button>
                 </h2>
             </div>
-            <div style="display:flex; align-items:center;">
-                <label style="margin-right:15px; font-size:0.9em; display:flex; align-items:center;">
+            <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; justify-content:flex-end;">
+                <label style="font-size:0.9em; display:flex; align-items:center;">
                     <input type="checkbox" class="auto-play-check" ${autoPlayStates[sec.id] ? 'checked' : ''} style="margin-right:3px;">
                     連続再生
                 </label>
-                <label style="margin-right:15px; font-size:0.9em; display:flex; align-items:center;" title="チェックを入れると他の音を止めずに重ねて鳴らします">
+                <label style="font-size:0.9em; display:flex; align-items:center;" title="チェックを入れると他の音を止めずに重ねて鳴らします">
                     <input type="checkbox" class="overlap-play-check" ${overlapPlayStates[sec.id] ? 'checked' : ''} style="margin-right:3px;">
                     重ねて再生
                 </label>
-                <button class="add-btn" style="background:#4CAF50; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">+ 新しい枠を追加</button>
-                <button class="delete-sec-btn" data-sec="${sec.id}" style="background:none; border:none; color:#ff5555; cursor:pointer; font-size:0.85em; text-decoration:underline; margin-left:10px;">🗑️ 欄ごと削除</button>
+                <button class="add-btn" style="background:#4CAF50; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; white-space:nowrap;">+ 新しい枠を追加</button>
+                <button class="delete-sec-btn" data-sec="${sec.id}" style="background:none; border:none; color:#ff5555; cursor:pointer; font-size:0.85em; text-decoration:underline; white-space:nowrap;">🗑️ 欄ごと削除</button>
             </div>
         </div>
         <div id="${sec.id}-container" class="grid-container ${sec.style === 'pad' ? 'pad-grid' : 'bgm-grid'}" style="display: ${sec.isCollapsed ? 'none' : 'grid'};">
