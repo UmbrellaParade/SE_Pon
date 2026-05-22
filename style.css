@@ -89,9 +89,54 @@ h2 {
     background-color: var(--pad-hover);
 }
 
+@keyframes playing-pulse {
+    0%, 100% { box-shadow: 0 0 12px rgba(76, 175, 80, 0.4); }
+    50%       { box-shadow: 0 0 28px rgba(76, 175, 80, 0.8); }
+}
+
 .sound-item.playing {
     border-color: var(--pad-active);
-    box-shadow: 0 0 15px rgba(76, 175, 80, 0.4);
+    animation: playing-pulse 1.4s ease-in-out infinite;
+}
+
+/* プログレスバー */
+.progress-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-wrap {
+    flex: 1;
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-wrap:hover {
+    height: 9px;
+    transition: height 0.15s;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--pad-active);
+    border-radius: 3px;
+    transition: width 0.25s linear;
+    pointer-events: none;
+}
+
+.time-display {
+    font-size: 0.78em;
+    color: #888;
+    white-space: nowrap;
+    min-width: 78px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 .item-header {

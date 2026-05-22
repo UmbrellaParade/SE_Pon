@@ -826,6 +826,12 @@ function createItem(index, secId, style, container, initialData = null) {
             <button class="fade-out-btn">↘ フェードアウト</button>
             ${mcBtnHtml}
         </div>` : ''}
+        <div class="progress-section">
+            <div class="progress-wrap" title="クリックで再生位置を移動できます">
+                <div class="progress-bar-fill"></div>
+            </div>
+            <span class="time-display">--:--</span>
+        </div>
     `;
 
     const fileInput = item.querySelector('.file-input');
@@ -835,6 +841,9 @@ function createItem(index, secId, style, container, initialData = null) {
     const fadeInBtn = item.querySelector('.fade-in-btn');
     const fadeOutBtn = item.querySelector('.fade-out-btn');
     const mcBtn = item.querySelector('.mc-btn');
+    const progressWrap = item.querySelector('.progress-wrap');
+    const progressFill = item.querySelector('.progress-bar-fill');
+    const timeDisplay = item.querySelector('.time-display');
     const volSlider = item.querySelector('.vol-slider');
     const mcVolSlider = item.querySelector('.mc-vol-slider');
     const repeatCheck = item.querySelector('.repeat-check');
@@ -861,11 +870,26 @@ function createItem(index, secId, style, container, initialData = null) {
         };
     };
 
+    // 時間フォーマット helper
+    const formatTime = (sec) => {
+        if (isNaN(sec) || !isFinite(sec)) return '--:--';
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    };
+
+    const resetProgress = () => {
+        progressFill.style.width = '0%';
+        timeDisplay.textContent = audio.duration ? `0:00 / ${formatTime(audio.duration)}` : '--:--';
+        playBtn.textContent = '▶ 再生';
+    };
+
     // 他の音を止めるメソッドと排他制御
     item.stopAudio = () => {
         clearInterval(fadeInterval);
         audio.pause();
         audio.currentTime = 0;
+        resetProgress();
     };
 
     const handleExclusivePlay = () => {
@@ -969,12 +993,41 @@ function createItem(index, secId, style, container, initialData = null) {
         });
     }
 
-    audio.addEventListener('play', () => item.classList.add('playing'));
-    audio.addEventListener('pause', () => item.classList.remove('playing'));
-    
+    audio.addEventListener('play', () => {
+        item.classList.add('playing');
+        playBtn.textContent = '▶ 再生中';
+    });
+    audio.addEventListener('pause', () => {
+        item.classList.remove('playing');
+        playBtn.textContent = '▶ 再生';
+    });
+
+    // 再生位置の更新
+    audio.addEventListener('timeupdate', () => {
+        if (audio.duration && !isNaN(audio.duration)) {
+            const pct = (audio.currentTime / audio.duration) * 100;
+            progressFill.style.width = pct + '%';
+            timeDisplay.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
+        }
+    });
+
+    // ファイル読み込み後に総時間を表示
+    audio.addEventListener('loadedmetadata', () => {
+        timeDisplay.textContent = `0:00 / ${formatTime(audio.duration)}`;
+    });
+
+    // プログレスバーをクリックしてシーク
+    progressWrap.addEventListener('click', (e) => {
+        if (!audio.duration || isNaN(audio.duration)) return;
+        const rect = progressWrap.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        audio.currentTime = ratio * audio.duration;
+    });
+
     audio.addEventListener('ended', () => {
         item.classList.remove('playing');
-        
+        resetProgress();
+
         if (!audio.loop) {
             if (autoPlayStates[secId]) {
                 const nextIndex = index + 1;
