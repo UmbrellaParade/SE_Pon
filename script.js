@@ -1126,11 +1126,14 @@ function initDataTransfer() {
             
             // FileオブジェクトをBase64(Data URL)に変換する関数
             const fileToBase64 = (file) => {
-                return new Promise((resolve, reject) => {
+                return new Promise((resolve) => {
                     const reader = new FileReader();
+                    let timerId = setTimeout(() => reader.abort(), 30000);
+                    const done = (result) => { clearTimeout(timerId); resolve(result); };
+                    reader.onload = () => done(reader.result);
+                    reader.onerror = () => done(null);
+                    reader.onabort = () => done(null);
                     reader.readAsDataURL(file);
-                    reader.onload = () => resolve(reader.result);
-                    reader.onerror = error => reject(error);
                 });
             };
 
@@ -1138,11 +1141,7 @@ function initDataTransfer() {
             const audioDataWithFiles = await Promise.all(allAudioData.map(async data => {
                 let fileDataUrl = null;
                 if (data.file) {
-                    try {
-                        fileDataUrl = await fileToBase64(data.file);
-                    } catch (e) {
-                        console.warn("ファイル変換エラー:", e);
-                    }
+                    fileDataUrl = await fileToBase64(data.file);
                 }
                 return {
                     id: data.id,
@@ -1177,8 +1176,10 @@ function initDataTransfer() {
             document.body.appendChild(downloadAnchorNode);
             downloadAnchorNode.click();
             document.body.removeChild(downloadAnchorNode);
-            URL.revokeObjectURL(url);
-            
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+            await customAlert('書き出しが完了しました！\nダウンロードフォルダに「pondashi_backup_with_audio.json」が保存されています。');
+
         } catch (e) {
             console.error("エクスポートエラー", e);
             await customAlert("データの書き出しに失敗しました。ファイルが大きすぎる可能性があります。");
@@ -1199,6 +1200,11 @@ function initDataTransfer() {
         labelEl.innerHTML = "読み込み中...";
 
         const reader = new FileReader();
+        reader.onerror = async () => {
+            await customAlert("ファイルの読み込みに失敗しました。");
+            labelEl.innerHTML = originalText;
+            importInput.value = "";
+        };
         reader.onload = async (event) => {
             try {
                 const importedObj = JSON.parse(event.target.result);
