@@ -501,6 +501,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         initDataTransfer(); // データ引き継ぎ機能の初期化
         initResetButton();  // リセットボタンの初期化
+        initGlobalVolume(); // 一括音量設定の初期化
     } catch (e) {
         console.error("データベースエラー", e);
     }
@@ -1129,6 +1130,51 @@ function createItem(index, secId, style, container, initialData = null) {
 
     enableDragAndDrop(item, container, secId);
     container.appendChild(item);
+}
+
+// --- 一括音量設定機能 ---
+function initGlobalVolume() {
+    const globalVolSlider    = document.getElementById('global-vol');
+    const globalMcVolSlider  = document.getElementById('global-mc-vol');
+    const globalVolDisplay   = document.getElementById('global-vol-display');
+    const globalMcVolDisplay = document.getElementById('global-mc-vol-display');
+    const applyBtn           = document.getElementById('global-vol-apply-btn');
+
+    if (!globalVolSlider || !applyBtn) return;
+
+    // スライダー操作中にパーセント表示を更新
+    globalVolSlider.addEventListener('input', () => {
+        globalVolDisplay.textContent = Math.round(parseFloat(globalVolSlider.value) * 100) + '%';
+    });
+    globalMcVolSlider.addEventListener('input', () => {
+        globalMcVolDisplay.textContent = Math.round(parseFloat(globalMcVolSlider.value) * 100) + '%';
+    });
+
+    // 一括設定ボタン
+    applyBtn.addEventListener('click', () => {
+        const newVol   = parseFloat(globalVolSlider.value);
+        const newMcVol = parseFloat(globalMcVolSlider.value);
+
+        // 全ての音源スライダーに適用（既存のイベントリスナーを活かして音量・DB更新まで一括実行）
+        document.querySelectorAll('.vol-slider').forEach(slider => {
+            slider.value = newVol;
+            slider.dispatchEvent(new Event('input'));
+        });
+
+        // 全てのMCスライダーに適用
+        document.querySelectorAll('.mc-vol-slider').forEach(slider => {
+            slider.value = newMcVol;
+            slider.dispatchEvent(new Event('input'));
+        });
+
+        // ボタンで完了フィードバック（モーダルなし）
+        applyBtn.textContent = '✓ 設定しました！';
+        applyBtn.style.backgroundColor = '#4CAF50';
+        setTimeout(() => {
+            applyBtn.textContent = '一括設定';
+            applyBtn.style.backgroundColor = '#2196F3';
+        }, 1500);
+    });
 }
 
 // --- リセット機能 ---
