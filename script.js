@@ -1125,42 +1125,56 @@ function initDataTransfer() {
             const allAudioData = await getAllData();
             
             // FileオブジェクトをBase64(Data URL)に変換する関数
+            // ・同期エラー・onerror・onabort・30秒タイムアウト、すべてnullで安全に解決
             const fileToBase64 = (file) => {
                 return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    let timerId = setTimeout(() => reader.abort(), 30000);
-                    const done = (result) => { clearTimeout(timerId); resolve(result); };
-                    reader.onload = () => done(reader.result);
-                    reader.onerror = () => done(null);
-                    reader.onabort = () => done(null);
-                    reader.readAsDataURL(file);
+                    try {
+                        const reader = new FileReader();
+                        let timerId = setTimeout(() => reader.abort(), 30000);
+                        const done = (result) => { clearTimeout(timerId); resolve(result); };
+                        reader.onload = () => done(reader.result);
+                        reader.onerror = () => done(null);
+                        reader.onabort = () => done(null);
+                        reader.readAsDataURL(file);
+                    } catch(e) {
+                        resolve(null); // readAsDataURL の同期エラーも安全に処理
+                    }
                 });
             };
 
-            // 音声ファイルをBase64に変換して抽出（※ファイルが多いと重くなります）
-            const audioDataWithFiles = await Promise.all(allAudioData.map(async data => {
+            // 音声ファイルをBase64に変換（1件ずつ処理でメモリ節約）
+            const audioDataWithFiles = [];
+            for (const data of allAudioData) {
                 let fileDataUrl = null;
                 if (data.file) {
                     fileDataUrl = await fileToBase64(data.file);
                 }
-                return {
+                audioDataWithFiles.push({
                     id: data.id,
-                    fileDataUrl: fileDataUrl, // Base64文字列として保存
+                    fileDataUrl: fileDataUrl,
                     fileName: data.fileName,
                     volume: data.volume,
                     loop: data.loop,
                     mcVolume: data.mcVolume
-                };
-            }));
+                });
+            }
 
             const memo = localStorage.getItem(MEMO_STORAGE_KEY) || "";
-            const templates = localStorage.getItem(TEMPLATE_STORAGE_KEY) || "[]";
+
+            // テンプレートデータ取得（壊れていても空配列で続行）
+            let parsedTemplates = [];
+            try {
+                const templatesStr = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+                if (templatesStr) parsedTemplates = JSON.parse(templatesStr);
+            } catch(e) {
+                console.warn("テンプレートデータの読み込みに失敗:", e);
+            }
 
             const exportObj = {
                 sections: allSections,
                 audioData: audioDataWithFiles,
                 memo: memo,
-                templates: JSON.parse(templates)
+                templates: parsedTemplates
             };
 
             // JSON文字列にする（サイズが巨大になる可能性がある）
