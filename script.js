@@ -1150,6 +1150,18 @@ function initGlobalVolume() {
         globalMcVolDisplay.textContent = Math.round(parseFloat(globalMcVolSlider.value) * 100) + '%';
     });
 
+    // 矢印ボタンで1%ずつ微調整
+    const stepSlider = (slider, display, delta) => {
+        const newVal = Math.max(0, Math.min(1, parseFloat(slider.value) + delta));
+        slider.value = newVal.toFixed(2);
+        display.textContent = Math.round(newVal * 100) + '%';
+    };
+
+    document.getElementById('global-vol-down')?.addEventListener('click',    () => stepSlider(globalVolSlider,   globalVolDisplay,   -0.01));
+    document.getElementById('global-vol-up')?.addEventListener('click',      () => stepSlider(globalVolSlider,   globalVolDisplay,    0.01));
+    document.getElementById('global-mc-vol-down')?.addEventListener('click', () => stepSlider(globalMcVolSlider, globalMcVolDisplay, -0.01));
+    document.getElementById('global-mc-vol-up')?.addEventListener('click',   () => stepSlider(globalMcVolSlider, globalMcVolDisplay,  0.01));
+
     // 一括設定ボタン
     applyBtn.addEventListener('click', () => {
         const newVol   = parseFloat(globalVolSlider.value);
