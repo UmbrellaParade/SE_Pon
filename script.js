@@ -1227,6 +1227,8 @@ function initDataTransfer() {
     if (!exportBtn || !importInput) return;
 
     // 書き出し機能
+    // ※音声ファイル本体は含めず「設定情報のみ」を書き出す。
+    //   音声ファイルはPCに残っているため、読み込み後に再選択するだけで復元できる。
     exportBtn.addEventListener('click', async () => {
         try {
             exportBtn.textContent = "書き出し中...";
@@ -1234,80 +1236,54 @@ function initDataTransfer() {
 
             const allSections = await getAllSections();
             const allAudioData = await getAllData();
-            
-            // FileオブジェクトをBase64(Data URL)に変換する関数
-            // ・同期エラー・onerror・onabort・30秒タイムアウト、すべてnullで安全に解決
-            const fileToBase64 = (file) => {
-                return new Promise((resolve) => {
-                    try {
-                        const reader = new FileReader();
-                        let timerId = setTimeout(() => reader.abort(), 30000);
-                        const done = (result) => { clearTimeout(timerId); resolve(result); };
-                        reader.onload = () => done(reader.result);
-                        reader.onerror = () => done(null);
-                        reader.onabort = () => done(null);
-                        reader.readAsDataURL(file);
-                    } catch(e) {
-                        resolve(null); // readAsDataURL の同期エラーも安全に処理
-                    }
-                });
-            };
 
-            // 音声ファイルをBase64に変換（1件ずつ処理でメモリ節約）
-            const audioDataWithFiles = [];
-            for (const data of allAudioData) {
-                let fileDataUrl = null;
-                if (data.file) {
-                    fileDataUrl = await fileToBase64(data.file);
-                }
-                audioDataWithFiles.push({
-                    id: data.id,
-                    fileDataUrl: fileDataUrl,
-                    fileName: data.fileName,
-                    volume: data.volume,
-                    loop: data.loop,
-                    mcVolume: data.mcVolume
-                });
-            }
+            // 音声ファイルは「ファイル名と設定だけ」を保存（バイナリは含めない）
+            const audioSettings = allAudioData.map(data => ({
+                id:        data.id,
+                fileName:  data.fileName || '',
+                volume:    data.volume,
+                loop:      data.loop,
+                mcVolume:  data.mcVolume
+            }));
 
             const memo = localStorage.getItem(MEMO_STORAGE_KEY) || "";
 
-            // テンプレートデータ取得（壊れていても空配列で続行）
             let parsedTemplates = [];
             try {
                 const templatesStr = localStorage.getItem(TEMPLATE_STORAGE_KEY);
                 if (templatesStr) parsedTemplates = JSON.parse(templatesStr);
-            } catch(e) {
-                console.warn("テンプレートデータの読み込みに失敗:", e);
-            }
+            } catch(e) { /* 壊れていても続行 */ }
 
             const exportObj = {
-                sections: allSections,
-                audioData: audioDataWithFiles,
-                memo: memo,
+                version:   2,
+                sections:  allSections,
+                audioData: audioSettings,
+                memo:      memo,
                 templates: parsedTemplates
             };
 
-            // JSON文字列にする（サイズが巨大になる可能性がある）
-            const jsonString = JSON.stringify(exportObj);
-            
-            // Blobを作成してダウンロード（巨大ファイル対応のため Blob を使用）
+            const jsonString = JSON.stringify(exportObj, null, 2);
             const blob = new Blob([jsonString], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", url);
-            downloadAnchorNode.setAttribute("download", "pondashi_backup_with_audio.json");
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            document.body.removeChild(downloadAnchorNode);
+            const url  = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href     = url;
+            a.download = 'pondashi_settings.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-            await customAlert('書き出しが完了しました！\nダウンロードフォルダに「pondashi_backup_with_audio.json」が保存されています。');
+            await customAlert(
+                '書き出し完了！\n' +
+                'ダウンロードフォルダに「pondashi_settings.json」が保存されました。\n\n' +
+                '※ 音声ファイルは含まれていません。\n' +
+                '読み込み後、各枠でファイルを再選択してください。'
+            );
 
         } catch (e) {
             console.error("エクスポートエラー", e);
-            await customAlert("データの書き出しに失敗しました。ファイルが大きすぎる可能性があります。");
+            await customAlert("書き出しに失敗しました。\nエラー: " + (e?.message || String(e)));
         } finally {
             exportBtn.textContent = "書き出し";
             exportBtn.disabled = false;
@@ -1338,25 +1314,12 @@ function initDataTransfer() {
                     throw new Error("無効なファイルフォーマットです。");
                 }
 
-                const ok = await customConfirm("現在の設定や欄はすべて上書きされます。よろしいですか？\n※音声データが含まれる場合、復元に数秒かかることがあります。");
+                const ok = await customConfirm("現在の設定や欄はすべて上書きされます。よろしいですか？");
                 if (!ok) {
                     importInput.value = "";
                     labelEl.innerHTML = originalText;
                     return;
                 }
-
-                // Base64 から File オブジェクトを復元する関数
-                const dataUrlToFile = (dataUrl, filename) => {
-                    const arr = dataUrl.split(',');
-                    const mime = arr[0].match(/:(.*?);/)[1];
-                    const bstr = atob(arr[1]);
-                    let n = bstr.length;
-                    const u8arr = new Uint8Array(n);
-                    while(n--){
-                        u8arr[n] = bstr.charCodeAt(n);
-                    }
-                    return new File([u8arr], filename, {type: mime});
-                };
 
                 if (db) {
                     // セクションの復元
@@ -1367,28 +1330,33 @@ function initDataTransfer() {
                     });
 
                     // オーディオ設定の復元
+                    // version 2（設定のみ）: file=null でファイル名だけ復元
+                    // 旧形式（fileDataUrl あり）: Base64からFileを復元
                     const txAudio = db.transaction([STORE_NAME_AUDIO], 'readwrite');
                     txAudio.objectStore(STORE_NAME_AUDIO).clear();
-                    
+
                     importedObj.audioData.forEach(a => {
                         let fileObj = null;
                         if (a.fileDataUrl) {
                             try {
-                                fileObj = dataUrlToFile(a.fileDataUrl, a.fileName);
+                                const arr  = a.fileDataUrl.split(',');
+                                const mime = arr[0].match(/:(.*?);/)[1];
+                                const bstr = atob(arr[1]);
+                                let n = bstr.length;
+                                const u8arr = new Uint8Array(n);
+                                while(n--) u8arr[n] = bstr.charCodeAt(n);
+                                fileObj = new File([u8arr], a.fileName, { type: mime });
                             } catch(err) {
-                                console.error("音声復元エラー", err);
+                                console.warn("音声復元スキップ:", err);
                             }
-                        } else if (a.file) {
-                            // 古いバージョンのバックアップ対策
-                            fileObj = null;
                         }
-                        
+
                         txAudio.objectStore(STORE_NAME_AUDIO).put({
-                            id: a.id,
-                            file: fileObj, // 復元した音声ファイルをセット
-                            fileName: a.fileName,
-                            volume: a.volume,
-                            loop: a.loop,
+                            id:       a.id,
+                            file:     fileObj,   // null なら再選択が必要
+                            fileName: a.fileName || '',
+                            volume:   a.volume,
+                            loop:     a.loop,
                             mcVolume: a.mcVolume
                         });
                     });
@@ -1402,7 +1370,7 @@ function initDataTransfer() {
                     localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(importedObj.templates));
                 }
 
-                await customAlert("データの読み込みが完了しました！\n画面を更新します。");
+                await customAlert("設定の読み込みが完了しました！\n音声ファイルは各枠で再選択してください。\n画面を更新します。");
                 location.reload();
                 
             } catch (error) {
