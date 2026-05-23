@@ -2,11 +2,12 @@
 const DB_NAME = 'PonDashiAppDB';
 const STORE_NAME_AUDIO = 'AudioFiles';
 const STORE_NAME_SECTION = 'Sections';
+const STORE_NAME_PRESET = 'Presets';
 let db;
 
 function initDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 2);
+        const request = indexedDB.open(DB_NAME, 3);
         request.onupgradeneeded = (e) => {
             db = e.target.result;
             if (!db.objectStoreNames.contains(STORE_NAME_AUDIO)) {
@@ -14,6 +15,10 @@ function initDB() {
             }
             if (!db.objectStoreNames.contains(STORE_NAME_SECTION)) {
                 db.createObjectStore(STORE_NAME_SECTION, { keyPath: 'id' });
+            }
+            // v3で追加：既存データには触れず新ストアだけ追加
+            if (!db.objectStoreNames.contains(STORE_NAME_PRESET)) {
+                db.createObjectStore(STORE_NAME_PRESET, { keyPath: 'id' });
             }
         };
         request.onsuccess = (e) => {
@@ -84,6 +89,37 @@ function deleteSectionFromDB(id) {
     if (!db) return;
     const tx = db.transaction([STORE_NAME_SECTION], 'readwrite');
     tx.objectStore(STORE_NAME_SECTION).delete(id);
+}
+
+// --- プリセット用DB操作 ---
+function savePresetToDB(preset) {
+    return new Promise((resolve, reject) => {
+        if (!db) return reject(new Error('DB not initialized'));
+        const tx = db.transaction([STORE_NAME_PRESET], 'readwrite');
+        tx.objectStore(STORE_NAME_PRESET).put(preset);
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e);
+    });
+}
+
+function getAllPresets() {
+    return new Promise((resolve, reject) => {
+        if (!db) return resolve([]);
+        const tx = db.transaction([STORE_NAME_PRESET], 'readonly');
+        const req = tx.objectStore(STORE_NAME_PRESET).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = (e) => reject(e);
+    });
+}
+
+function deletePresetFromDB(id) {
+    return new Promise((resolve, reject) => {
+        if (!db) return resolve();
+        const tx = db.transaction([STORE_NAME_PRESET], 'readwrite');
+        tx.objectStore(STORE_NAME_PRESET).delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e);
+    });
 }
 
 // --- メイン処理 ---
@@ -502,6 +538,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initDataTransfer(); // データ引き継ぎ機能の初期化
         initResetButton();  // リセットボタンの初期化
         initGlobalVolume(); // 一括音量設定の初期化
+        initPreset();       // プリセット機能の初期化
     } catch (e) {
         console.error("データベースエラー", e);
     }
@@ -1206,6 +1243,8 @@ function initResetButton() {
             txAudio.objectStore(STORE_NAME_AUDIO).clear();
             const txSec = db.transaction([STORE_NAME_SECTION], 'readwrite');
             txSec.objectStore(STORE_NAME_SECTION).clear();
+            const txPreset = db.transaction([STORE_NAME_PRESET], 'readwrite');
+            txPreset.objectStore(STORE_NAME_PRESET).clear();
         }
 
         // localStorage を全消去
@@ -1217,6 +1256,189 @@ function initResetButton() {
         await customAlert('デフォルトに戻しました！\n画面を更新します。');
         location.reload();
     });
+}
+
+// --- シーンプリセット機能 ---
+function initPreset() {
+    const presetSelect    = document.getElementById('preset-select');
+    const loadPresetBtn   = document.getElementById('load-preset-btn');
+    const savePresetBtn   = document.getElementById('save-preset-btn');
+    const updatePresetBtn = document.getElementById('update-preset-btn');
+    const deletePresetBtn = document.getElementById('delete-preset-btn');
+    const presetToggle    = document.getElementById('preset-toggle');
+    const presetBody      = document.getElementById('preset-body');
+    const presetToggleIcon = document.getElementById('preset-toggle-icon');
+    const PRESET_COLLAPSED_KEY = 'pondashi_preset_collapsed';
+
+    if (!presetSelect) return;
+
+    // 折りたたみ（サイドバー配置時のみ有効）
+    if (presetToggle && presetBody && presetToggleIcon) {
+        if (localStorage.getItem(PRESET_COLLAPSED_KEY) === '1') {
+            presetBody.style.display = 'none';
+            presetToggleIcon.textContent = '▶';
+        }
+        presetToggle.addEventListener('click', () => {
+            const isCollapsed = presetBody.style.display === 'none';
+            presetBody.style.display = isCollapsed ? 'block' : 'none';
+            presetToggleIcon.textContent = isCollapsed ? '▼' : '▶';
+            localStorage.setItem(PRESET_COLLAPSED_KEY, isCollapsed ? '0' : '1');
+        });
+    }
+
+    let presetList = [];
+
+    async function loadPresets() {
+        presetList = await getAllPresets();
+        // 作成日時の新しい順に並べる
+        presetList.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        renderPresetOptions();
+    }
+
+    function renderPresetOptions() {
+        presetSelect.innerHTML = '<option value="">-- プリセットを選択 --</option>';
+        presetList.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name;
+            presetSelect.appendChild(opt);
+        });
+    }
+
+    // 新規保存
+    savePresetBtn.addEventListener('click', async () => {
+        const name = await customPrompt(
+            'プリセットの名前を入力してください\n（例: 5/30雑談枠、歌配信用、声劇用 など）'
+        );
+        if (!name || name.trim() === '') return;
+
+        try {
+            savePresetBtn.textContent = '保存中...';
+            savePresetBtn.disabled = true;
+
+            const allSections  = await getAllSections();
+            const allAudioData = await getAllData(); // Fileオブジェクトごと保存
+
+            const preset = {
+                id:           'preset_' + Date.now(),
+                name:         name.trim(),
+                createdAt:    new Date().toISOString(),
+                sections:     allSections,
+                audioData:    allAudioData,
+                overlapStates: (() => { try { return JSON.parse(localStorage.getItem('pondashi_overlap_states') || '{}'); } catch(e) { return {}; } })(),
+                navVisibility: (() => { try { return JSON.parse(localStorage.getItem('pondashi_nav_visibility') || '{}'); } catch(e) { return {}; } })(),
+            };
+
+            await savePresetToDB(preset);
+            await loadPresets();
+            presetSelect.value = preset.id;
+            await customAlert(`プリセット「${preset.name}」を保存しました！`);
+        } catch(e) {
+            console.error('プリセット保存エラー', e);
+            await customAlert('保存に失敗しました。\nエラー: ' + (e?.message || String(e)));
+        } finally {
+            savePresetBtn.textContent = '新規保存';
+            savePresetBtn.disabled = false;
+        }
+    });
+
+    // 上書き保存
+    updatePresetBtn.addEventListener('click', async () => {
+        const id = presetSelect.value;
+        if (!id) { await customAlert('上書きするプリセットを選択してください。'); return; }
+        const p = presetList.find(x => x.id === id);
+        if (!p) return;
+
+        const ok = await customConfirm(`「${p.name}」を現在の状態で上書きしますか？`);
+        if (!ok) return;
+
+        try {
+            updatePresetBtn.textContent = '保存中...';
+            updatePresetBtn.disabled = true;
+
+            const allSections  = await getAllSections();
+            const allAudioData = await getAllData();
+
+            const updated = {
+                ...p,
+                sections:     allSections,
+                audioData:    allAudioData,
+                overlapStates: (() => { try { return JSON.parse(localStorage.getItem('pondashi_overlap_states') || '{}'); } catch(e) { return {}; } })(),
+                navVisibility: (() => { try { return JSON.parse(localStorage.getItem('pondashi_nav_visibility') || '{}'); } catch(e) { return {}; } })(),
+            };
+
+            await savePresetToDB(updated);
+            await loadPresets();
+            presetSelect.value = id;
+            await customAlert('上書き保存しました！');
+        } catch(e) {
+            console.error('プリセット上書きエラー', e);
+            await customAlert('保存に失敗しました。\nエラー: ' + (e?.message || String(e)));
+        } finally {
+            updatePresetBtn.textContent = '上書き';
+            updatePresetBtn.disabled = false;
+        }
+    });
+
+    // 読込
+    loadPresetBtn.addEventListener('click', async () => {
+        const id = presetSelect.value;
+        if (!id) { await customAlert('読み込むプリセットを選択してください。'); return; }
+        const p = presetList.find(x => x.id === id);
+        if (!p) return;
+
+        const ok = await customConfirm(`「${p.name}」を読み込みます。\n現在の設定はすべて上書きされます。よろしいですか？`);
+        if (!ok) return;
+
+        try {
+            // セクションを復元
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction([STORE_NAME_SECTION], 'readwrite');
+                const store = tx.objectStore(STORE_NAME_SECTION);
+                store.clear();
+                p.sections.forEach(s => store.put(s));
+                tx.oncomplete = () => resolve();
+                tx.onerror = (e) => reject(e);
+            });
+
+            // 音声データをFileオブジェクトごと復元
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction([STORE_NAME_AUDIO], 'readwrite');
+                const store = tx.objectStore(STORE_NAME_AUDIO);
+                store.clear();
+                p.audioData.forEach(a => store.put(a));
+                tx.oncomplete = () => resolve();
+                tx.onerror = (e) => reject(e);
+            });
+
+            // 重ねて再生・目次表示の状態を復元
+            if (p.overlapStates) localStorage.setItem('pondashi_overlap_states', JSON.stringify(p.overlapStates));
+            if (p.navVisibility)  localStorage.setItem('pondashi_nav_visibility',  JSON.stringify(p.navVisibility));
+
+            await customAlert(`「${p.name}」を読み込みました！\n画面を更新します。`);
+            location.reload();
+        } catch(e) {
+            console.error('プリセット読込エラー', e);
+            await customAlert('読み込みに失敗しました。\nエラー: ' + (e?.message || String(e)));
+        }
+    });
+
+    // 削除
+    deletePresetBtn.addEventListener('click', async () => {
+        const id = presetSelect.value;
+        if (!id) { await customAlert('削除するプリセットを選択してください。'); return; }
+        const p = presetList.find(x => x.id === id);
+        if (!p) return;
+
+        const ok = await customConfirm(`本当にプリセット「${p.name}」を削除しますか？`);
+        if (!ok) return;
+
+        await deletePresetFromDB(id);
+        await loadPresets();
+        await customAlert('プリセットを削除しました。');
+    });
+
+    loadPresets();
 }
 
 // --- データ引き継ぎ（エクスポート・インポート）機能 ---
