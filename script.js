@@ -3,11 +3,12 @@ const DB_NAME = 'PonDashiAppDB';
 const STORE_NAME_AUDIO = 'AudioFiles';
 const STORE_NAME_SECTION = 'Sections';
 const STORE_NAME_PRESET = 'Presets';
+const STORE_NAME_BROADCAST_SET = 'BroadcastSets';
 let db;
 
 function initDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 3);
+        const request = indexedDB.open(DB_NAME, 4);
         request.onupgradeneeded = (e) => {
             db = e.target.result;
             if (!db.objectStoreNames.contains(STORE_NAME_AUDIO)) {
@@ -19,6 +20,10 @@ function initDB() {
             // v3で追加：既存データには触れず新ストアだけ追加
             if (!db.objectStoreNames.contains(STORE_NAME_PRESET)) {
                 db.createObjectStore(STORE_NAME_PRESET, { keyPath: 'id' });
+            }
+            // v4で追加：メモ＋音源プリセットをまとめた配信セット
+            if (!db.objectStoreNames.contains(STORE_NAME_BROADCAST_SET)) {
+                db.createObjectStore(STORE_NAME_BROADCAST_SET, { keyPath: 'id' });
             }
         };
         request.onsuccess = (e) => {
@@ -117,6 +122,37 @@ function deletePresetFromDB(id) {
         if (!db) return resolve();
         const tx = db.transaction([STORE_NAME_PRESET], 'readwrite');
         tx.objectStore(STORE_NAME_PRESET).delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e);
+    });
+}
+
+// --- 配信セット用DB操作 ---
+function saveBroadcastSetToDB(broadcastSet) {
+    return new Promise((resolve, reject) => {
+        if (!db) return reject(new Error('DB not initialized'));
+        const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
+        tx.objectStore(STORE_NAME_BROADCAST_SET).put(broadcastSet);
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e);
+    });
+}
+
+function getAllBroadcastSets() {
+    return new Promise((resolve, reject) => {
+        if (!db) return resolve([]);
+        const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readonly');
+        const req = tx.objectStore(STORE_NAME_BROADCAST_SET).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = (e) => reject(e);
+    });
+}
+
+function deleteBroadcastSetFromDB(id) {
+    return new Promise((resolve, reject) => {
+        if (!db) return resolve();
+        const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
+        tx.objectStore(STORE_NAME_BROADCAST_SET).delete(id);
         tx.oncomplete = () => resolve();
         tx.onerror = (e) => reject(e);
     });
@@ -565,7 +601,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initResetButton();  // リセットボタンの初期化
         initGlobalVolume(); // 一括音量設定の初期化
         initPreset();       // プリセット機能の初期化
-        initBroadcastSetSave(); // メモテンプレート＋プリセット同時保存の初期化
+        initBroadcastSetSave(); // 配信セット保存の初期化
     } catch (e) {
         console.error("データベースエラー", e);
     }
@@ -1259,7 +1295,7 @@ function initResetButton() {
     if (!resetBtn) return;
 
     resetBtn.addEventListener('click', async () => {
-        const ok1 = await customConfirm('アプリをデフォルト状態に戻しますか？\n設定した音声ファイル・欄の構成・メモ・テンプレートがすべて削除されます。');
+        const ok1 = await customConfirm('アプリをデフォルト状態に戻しますか？\n設定した音声ファイル・欄の構成・メモ・テンプレート・プリセット・配信セットがすべて削除されます。');
         if (!ok1) return;
         const ok2 = await customConfirm('本当によろしいですか？\nこの操作は元に戻せません。');
         if (!ok2) return;
@@ -1272,6 +1308,8 @@ function initResetButton() {
             txSec.objectStore(STORE_NAME_SECTION).clear();
             const txPreset = db.transaction([STORE_NAME_PRESET], 'readwrite');
             txPreset.objectStore(STORE_NAME_PRESET).clear();
+            const txBroadcastSet = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
+            txBroadcastSet.objectStore(STORE_NAME_BROADCAST_SET).clear();
         }
 
         // localStorage を全消去
@@ -1279,6 +1317,7 @@ function initResetButton() {
         localStorage.removeItem(TEMPLATE_STORAGE_KEY);
         localStorage.removeItem('pondashi_overlap_states');
         localStorage.removeItem('pondashi_volume_migration_v1');
+        localStorage.removeItem('pondashi_broadcast_set_migration_v1');
 
         await customAlert('デフォルトに戻しました！\n画面を更新します。');
         location.reload();
@@ -1312,9 +1351,133 @@ async function buildScenePreset(name, basePreset = null) {
     };
 }
 
+async function buildBroadcastSet(name, memoContent, baseSet = null) {
+    const now = new Date().toISOString();
+    const allSections  = await getAllSections();
+    const allAudioData = await getAllData(); // Fileオブジェクトごと保存
+
+    return {
+        ...(baseSet || {}),
+        id:            baseSet?.id || 'broadcast_set_' + Date.now(),
+        name:          name.trim(),
+        createdAt:     baseSet?.createdAt || now,
+        updatedAt:     now,
+        memo:          memoContent,
+        sections:      allSections,
+        audioData:     allAudioData,
+        overlapStates: getStoredObject('pondashi_overlap_states'),
+        navVisibility: getStoredObject('pondashi_nav_visibility'),
+    };
+}
+
+function getTimestampFromId(id) {
+    const match = String(id || '').match(/_(\d+)$/);
+    return match ? Number(match[1]) : 0;
+}
+
+async function restoreSceneData(savedSet) {
+    await new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_NAME_SECTION], 'readwrite');
+        const store = tx.objectStore(STORE_NAME_SECTION);
+        store.clear();
+        (savedSet.sections || []).forEach(s => store.put(s));
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e);
+    });
+
+    await new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_NAME_AUDIO], 'readwrite');
+        const store = tx.objectStore(STORE_NAME_AUDIO);
+        store.clear();
+        (savedSet.audioData || []).forEach(a => store.put(a));
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e);
+    });
+
+    if (savedSet.overlapStates) localStorage.setItem('pondashi_overlap_states', JSON.stringify(savedSet.overlapStates));
+    if (savedSet.navVisibility) localStorage.setItem('pondashi_nav_visibility', JSON.stringify(savedSet.navVisibility));
+}
+
+async function migrateSplitBroadcastSetsOnce() {
+    const MIGRATION_KEY = 'pondashi_broadcast_set_migration_v1';
+    if (localStorage.getItem(MIGRATION_KEY) === '1') return;
+
+    try {
+        loadTemplatesFromStorage();
+        const [existingSets, presets] = await Promise.all([getAllBroadcastSets(), getAllPresets()]);
+        const existingNames = new Set(existingSets.map(s => s.name));
+        const candidates = [];
+
+        templates.forEach(template => {
+            const templateTime = getTimestampFromId(template.id);
+            if (!template.name || !templateTime || existingNames.has(template.name)) return;
+
+            const matchingPreset = presets.find(p => {
+                const presetTime = getTimestampFromId(p.id) || Date.parse(p.createdAt || '');
+                return p.name === template.name &&
+                       presetTime &&
+                       Math.abs(presetTime - templateTime) <= 30 * 60 * 1000;
+            });
+
+            if (matchingPreset) {
+                candidates.push({ template, preset: matchingPreset });
+                existingNames.add(template.name);
+            }
+        });
+
+        for (let i = 0; i < candidates.length; i++) {
+            const { template, preset } = candidates[i];
+            await saveBroadcastSetToDB({
+                id: 'broadcast_set_migrated_' + Date.now() + '_' + i,
+                name: template.name,
+                createdAt: preset.createdAt || new Date(getTimestampFromId(template.id)).toISOString(),
+                updatedAt: new Date().toISOString(),
+                memo: template.content || '',
+                sections: preset.sections || [],
+                audioData: preset.audioData || [],
+                overlapStates: preset.overlapStates || {},
+                navVisibility: preset.navVisibility || {},
+                migratedFromSplitSave: true
+            });
+        }
+    } catch(e) {
+        console.warn('配信セット移行エラー', e);
+    } finally {
+        localStorage.setItem(MIGRATION_KEY, '1');
+    }
+}
+
 function initBroadcastSetSave() {
+    const broadcastSetSelect = document.getElementById('broadcast-set-select');
+    const loadSetBtn = document.getElementById('load-broadcast-set-btn');
     const saveSetBtn = document.getElementById('save-broadcast-set-btn');
-    if (!saveSetBtn) return;
+    const updateSetBtn = document.getElementById('update-broadcast-set-btn');
+    const deleteSetBtn = document.getElementById('delete-broadcast-set-btn');
+
+    if (!broadcastSetSelect || !saveSetBtn) return;
+
+    let broadcastSetList = [];
+
+    async function loadBroadcastSets(selectedId = '') {
+        await migrateSplitBroadcastSetsOnce();
+        broadcastSetList = await getAllBroadcastSets();
+        broadcastSetList.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        renderBroadcastSetOptions(selectedId);
+    }
+
+    function renderBroadcastSetOptions(selectedId = '') {
+        broadcastSetSelect.innerHTML = '<option value="">-- セットを選択 --</option>';
+        broadcastSetList.forEach(set => {
+            const opt = document.createElement('option');
+            opt.value = set.id;
+            opt.textContent = set.name;
+            broadcastSetSelect.appendChild(opt);
+        });
+
+        if (selectedId) {
+            broadcastSetSelect.value = selectedId;
+        }
+    }
 
     saveSetBtn.addEventListener('click', async () => {
         const memoArea = document.getElementById('memo-area');
@@ -1324,7 +1487,7 @@ function initBroadcastSetSave() {
         }
 
         const name = await customPrompt(
-            '配信セットの名前を入力してください\n同じ名前でメモテンプレートと音源プリセットを保存します。\n（例: 7/13 Sunoパ本番、ゲスト回用 など）'
+            '配信セットの名前を入力してください\nメモ・音源・欄構成をまとめて保存します。\n（例: 7/13 Sunoパ本番、ゲスト回用 など）'
         );
         if (!name || name.trim() === '') return;
 
@@ -1333,18 +1496,11 @@ function initBroadcastSetSave() {
             saveSetBtn.disabled = true;
 
             const trimmedName = name.trim();
-            const preset = await buildScenePreset(trimmedName);
-            await savePresetToDB(preset);
+            const broadcastSet = await buildBroadcastSet(trimmedName, memoArea.value);
+            await saveBroadcastSetToDB(broadcastSet);
+            await loadBroadcastSets(broadcastSet.id);
 
-            const template = createMemoTemplate(trimmedName, memoArea.value);
-            if (typeof window.refreshPresetOptions === 'function') {
-                await window.refreshPresetOptions(preset.id);
-            }
-
-            await customAlert(
-                `配信セット「${trimmedName}」を保存しました！\n` +
-                `メモテンプレート「${template.name}」と音源プリセット「${preset.name}」に追加しました。`
-            );
+            await customAlert(`配信セット「${trimmedName}」を保存しました！`);
         } catch(e) {
             console.error('配信セット保存エラー', e);
             await customAlert('保存に失敗しました。\nエラー: ' + (e?.message || String(e)));
@@ -1353,6 +1509,78 @@ function initBroadcastSetSave() {
             saveSetBtn.disabled = false;
         }
     });
+
+    updateSetBtn?.addEventListener('click', async () => {
+        const id = broadcastSetSelect.value;
+        if (!id) { await customAlert('上書きする配信セットを選択してください。'); return; }
+
+        const memoArea = document.getElementById('memo-area');
+        if (!memoArea || memoArea.value.trim() === '') {
+            await customAlert('メモが空です。');
+            return;
+        }
+
+        const currentSet = broadcastSetList.find(x => x.id === id);
+        if (!currentSet) return;
+
+        const ok = await customConfirm(`「${currentSet.name}」を現在のメモ・音源・欄構成で上書きしますか？`);
+        if (!ok) return;
+
+        try {
+            updateSetBtn.textContent = '保存中...';
+            updateSetBtn.disabled = true;
+
+            const updated = await buildBroadcastSet(currentSet.name, memoArea.value, currentSet);
+            await saveBroadcastSetToDB(updated);
+            await loadBroadcastSets(id);
+            await customAlert('上書き保存しました！');
+        } catch(e) {
+            console.error('配信セット上書きエラー', e);
+            await customAlert('保存に失敗しました。\nエラー: ' + (e?.message || String(e)));
+        } finally {
+            updateSetBtn.textContent = '上書き';
+            updateSetBtn.disabled = false;
+        }
+    });
+
+    loadSetBtn?.addEventListener('click', async () => {
+        const id = broadcastSetSelect.value;
+        if (!id) { await customAlert('読み込む配信セットを選択してください。'); return; }
+
+        const savedSet = broadcastSetList.find(x => x.id === id);
+        if (!savedSet) return;
+
+        const ok = await customConfirm(`「${savedSet.name}」を読み込みます。\n現在のメモ・音源・欄構成は上書きされます。よろしいですか？`);
+        if (!ok) return;
+
+        try {
+            localStorage.setItem(MEMO_STORAGE_KEY, savedSet.memo || '');
+            await restoreSceneData(savedSet);
+
+            await customAlert(`「${savedSet.name}」を読み込みました！\n画面を更新します。`);
+            location.reload();
+        } catch(e) {
+            console.error('配信セット読込エラー', e);
+            await customAlert('読み込みに失敗しました。\nエラー: ' + (e?.message || String(e)));
+        }
+    });
+
+    deleteSetBtn?.addEventListener('click', async () => {
+        const id = broadcastSetSelect.value;
+        if (!id) { await customAlert('削除する配信セットを選択してください。'); return; }
+
+        const savedSet = broadcastSetList.find(x => x.id === id);
+        if (!savedSet) return;
+
+        const ok = await customConfirm(`本当に配信セット「${savedSet.name}」を削除しますか？`);
+        if (!ok) return;
+
+        await deleteBroadcastSetFromDB(id);
+        await loadBroadcastSets();
+        await customAlert('配信セットを削除しました。');
+    });
+
+    loadBroadcastSets();
 }
 
 // --- シーンプリセット機能 ---
