@@ -4,33 +4,167 @@ const STORE_NAME_AUDIO = 'AudioFiles';
 const STORE_NAME_SECTION = 'Sections';
 const STORE_NAME_PRESET = 'Presets';
 const STORE_NAME_BROADCAST_SET = 'BroadcastSets';
+const DB_VERSION = 5;
 let db;
 
-function initDB() {
+const REQUIRED_STORES = [
+    { name: STORE_NAME_AUDIO, options: { keyPath: 'id' } },
+    { name: STORE_NAME_SECTION, options: { keyPath: 'id' } },
+    { name: STORE_NAME_PRESET, options: { keyPath: 'id' } },
+    { name: STORE_NAME_BROADCAST_SET, options: { keyPath: 'id' } },
+];
+
+function createMissingStores(database) {
+    REQUIRED_STORES.forEach(({ name, options }) => {
+        if (!database.objectStoreNames.contains(name)) {
+            database.createObjectStore(name, options);
+        }
+    });
+}
+
+function getMissingStoreNames(database) {
+    return REQUIRED_STORES
+        .map(({ name }) => name)
+        .filter(name => !database.objectStoreNames.contains(name));
+}
+
+function openPonDashiDB(version) {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 4);
+        const request = version ? indexedDB.open(DB_NAME, version) : indexedDB.open(DB_NAME);
         request.onupgradeneeded = (e) => {
             db = e.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME_AUDIO)) {
-                db.createObjectStore(STORE_NAME_AUDIO, { keyPath: 'id' });
-            }
-            if (!db.objectStoreNames.contains(STORE_NAME_SECTION)) {
-                db.createObjectStore(STORE_NAME_SECTION, { keyPath: 'id' });
-            }
-            // v3で追加：既存データには触れず新ストアだけ追加
-            if (!db.objectStoreNames.contains(STORE_NAME_PRESET)) {
-                db.createObjectStore(STORE_NAME_PRESET, { keyPath: 'id' });
-            }
-            // v4で追加：メモ＋音源プリセットをまとめた配信セット
-            if (!db.objectStoreNames.contains(STORE_NAME_BROADCAST_SET)) {
-                db.createObjectStore(STORE_NAME_BROADCAST_SET, { keyPath: 'id' });
-            }
+            createMissingStores(db);
         };
         request.onsuccess = (e) => {
             db = e.target.result;
-            resolve();
+            resolve(db);
         };
-        request.onerror = (e) => reject(e);
+        request.onerror = (e) => reject(e.target.error || e);
+        request.onblocked = () => reject(new Error('IndexedDB upgrade blocked. Close other app tabs and reload.'));
+    });
+}
+
+async function initDB() {
+    try {
+        db = await openPonDashiDB(DB_VERSION);
+    } catch (e) {
+        if (e?.name !== 'VersionError') throw e;
+        // A newer trial version may have opened this DB. Reopen at its current version.
+        db = await openPonDashiDB();
+    }
+
+    const missingStores = getMissingStoreNames(db);
+    if (missingStores.length > 0) {
+        const repairVersion = db.version + 1;
+        console.warn('IndexedDB store repair:', missingStores.join(', '));
+        db.close();
+        db = await openPonDashiDB(repairVersion);
+    }
+
+    const stillMissing = getMissingStoreNames(db);
+    if (stillMissing.length > 0) {
+        throw new Error(`IndexedDB stores are missing: ${stillMissing.join(', ')}`);
+    }
+}
+
+function resetToDefaultSections() {
+    return DEFAULT_SECTIONS.map(section => ({ ...section }));
+}
+
+function initSectionControls() {
+    const addSectionBtn = document.getElementById('add-section-btn');
+    const addSeSectionBtn = document.getElementById('add-se-section-btn');
+
+    if (addSectionBtn && addSectionBtn.dataset.initialized !== '1') {
+        addSectionBtn.dataset.initialized = '1';
+        addSectionBtn.addEventListener('click', async () => {
+            const title = await customPrompt("新しい欄の名前を入力してください\n（例: 「🎤 ゲスト用BGM」「📢 特殊効果音」など）");
+            if (!title || title.trim() === '') return;
+
+            const newId = 'custom_' + Date.now();
+            const newOrder = sections.length > 0 ? Math.max(...sections.map(s => s.order)) + 1 : 1;
+            const newSec = { id: newId, title: title, style: 'bgm', order: newOrder, isCollapsed: false };
+
+            sections.push(newSec);
+            sectionCounts[newId] = 0;
+            autoPlayStates[newId] = false;
+            saveSection(newId, title, 'bgm', newOrder, false);
+
+            appendSectionDOM(newSec, []);
+            updateSectionNav();
+        });
+    }
+
+    if (addSeSectionBtn && addSeSectionBtn.dataset.initialized !== '1') {
+        addSeSectionBtn.dataset.initialized = '1';
+        addSeSectionBtn.addEventListener('click', async () => {
+            const title = await customPrompt("効果音の欄の名前を入力してください\n（例: 「💥 効果音①」「🔔 ベル・スイッチ」など）");
+            if (!title || title.trim() === '') return;
+
+            const newId = 'custom_' + Date.now();
+            const newOrder = sections.length > 0 ? Math.max(...sections.map(s => s.order)) + 1 : 1;
+            const newSec = { id: newId, title: title, style: 'pad', order: newOrder, isCollapsed: false };
+
+            sections.push(newSec);
+            sectionCounts[newId] = 0;
+            autoPlayStates[newId] = false;
+            overlapPlayStates[newId] = true;
+            saveSection(newId, title, 'pad', newOrder, false);
+
+            appendSectionDOM(newSec, []);
+            updateSectionNav();
+        });
+    }
+}
+
+async function startWithDefaultViewAfterDBError(error) {
+    console.error("データベースエラー", error);
+    db = null;
+    sections = resetToDefaultSections();
+    sectionCounts = {};
+    autoPlayStates = {};
+
+    sections.forEach(sec => {
+        sectionCounts[sec.id] = 0;
+        autoPlayStates[sec.id] = false;
+        if (overlapPlayStates[sec.id] === undefined) overlapPlayStates[sec.id] = (sec.style === 'pad');
+        if (navVisibilityStates[sec.id] === undefined) navVisibilityStates[sec.id] = true;
+    });
+
+    renderAllSections([]);
+    initSectionControls();
+    initResetButton();
+    initGlobalVolume();
+
+    await customAlert(
+        "オンライン版の保存データ読み込みに失敗したため、デフォルト画面で起動しました。\n" +
+        "復元する場合は、アプリをデフォルトに戻して再読み込みしてから、完全バックアップJSONを読み込んでください。\n" +
+        "この表示が続く場合は、オンライン版を開いている他のタブを閉じてから再読み込みしてください。"
+    );
+}
+
+function deleteAppDatabase() {
+    return new Promise((resolve) => {
+        try {
+            if (db) {
+                db.close();
+                db = null;
+            }
+
+            const request = indexedDB.deleteDatabase(DB_NAME);
+            request.onsuccess = () => resolve(true);
+            request.onerror = (e) => {
+                console.error('IndexedDB削除エラー', e.target.error);
+                resolve(false);
+            };
+            request.onblocked = () => {
+                console.warn('IndexedDB削除がブロックされました。別タブでアプリが開いている可能性があります。');
+                resolve(false);
+            };
+        } catch(e) {
+            console.error('IndexedDB削除エラー', e);
+            resolve(false);
+        }
     });
 }
 
@@ -63,118 +197,209 @@ function saveData(id, file, fileName, volume, loop, mcVolume = 0.1) {
 
 function getAllData() {
     return new Promise((resolve) => {
-        if (!db) return resolve([]);
-        const transaction = db.transaction([STORE_NAME_AUDIO], 'readonly');
-        const store = transaction.objectStore(STORE_NAME_AUDIO);
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result);
+        try {
+            if (!db || !db.objectStoreNames.contains(STORE_NAME_AUDIO)) return resolve([]);
+            const transaction = db.transaction([STORE_NAME_AUDIO], 'readonly');
+            const store = transaction.objectStore(STORE_NAME_AUDIO);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = (e) => {
+                console.error('音声データ読み込みエラー', e.target.error);
+                resolve([]);
+            };
+            transaction.onerror = (e) => {
+                console.error('音声データ読み込みエラー', e.target.error);
+                resolve([]);
+            };
+        } catch(e) {
+            console.error('音声データ読み込みエラー', e);
+            resolve([]);
+        }
     });
 }
 
 function clearDataByType(typePrefix) {
     return new Promise((resolve) => {
-        if (!db) return resolve();
-        const transaction = db.transaction([STORE_NAME_AUDIO], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME_AUDIO);
-        const request = store.openCursor();
-        request.onsuccess = (e) => {
-            const cursor = e.target.result;
-            if (cursor) {
-                if (cursor.key.startsWith(typePrefix + '-')) {
-                    cursor.delete();
+        try {
+            if (!db || !db.objectStoreNames.contains(STORE_NAME_AUDIO)) return resolve();
+            const transaction = db.transaction([STORE_NAME_AUDIO], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME_AUDIO);
+            const request = store.openCursor();
+            request.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    if (cursor.key.startsWith(typePrefix + '-')) {
+                        cursor.delete();
+                    }
+                    cursor.continue();
+                } else {
+                    resolve();
                 }
-                cursor.continue();
-            } else {
+            };
+            request.onerror = (e) => {
+                console.error('音声データ削除エラー', e.target.error);
                 resolve();
-            }
-        };
+            };
+            transaction.onerror = (e) => {
+                console.error('音声データ削除エラー', e.target.error);
+                resolve();
+            };
+        } catch(e) {
+            console.error('音声データ削除エラー', e);
+            resolve();
+        }
     });
 }
 
 function saveSection(id, title, style, order, isCollapsed = false) {
-    if (!db) return;
-    const tx = db.transaction([STORE_NAME_SECTION], 'readwrite');
-    tx.objectStore(STORE_NAME_SECTION).put({ id, title, style, order, isCollapsed });
+    if (!db || !db.objectStoreNames.contains(STORE_NAME_SECTION)) return false;
+    try {
+        const tx = db.transaction([STORE_NAME_SECTION], 'readwrite');
+        tx.objectStore(STORE_NAME_SECTION).put({ id, title, style, order, isCollapsed });
+        tx.onerror = (e) => console.error('欄保存エラー', e.target.error);
+        return true;
+    } catch(e) {
+        console.error('欄保存エラー', e);
+        return false;
+    }
 }
 
 function getAllSections() {
     return new Promise((resolve) => {
-        if (!db) return resolve([]);
-        const tx = db.transaction([STORE_NAME_SECTION], 'readonly');
-        const req = tx.objectStore(STORE_NAME_SECTION).getAll();
-        req.onsuccess = () => {
-            let res = req.result;
-            res.sort((a, b) => a.order - b.order);
-            resolve(res);
-        };
+        try {
+            if (!db || !db.objectStoreNames.contains(STORE_NAME_SECTION)) return resolve([]);
+            const tx = db.transaction([STORE_NAME_SECTION], 'readonly');
+            const req = tx.objectStore(STORE_NAME_SECTION).getAll();
+            req.onsuccess = () => {
+                let res = (req.result || []).filter(section => section && section.id);
+                res.sort((a, b) => (a.order || 0) - (b.order || 0));
+                resolve(res);
+            };
+            req.onerror = (e) => {
+                console.error('欄読み込みエラー', e.target.error);
+                resolve([]);
+            };
+            tx.onerror = (e) => {
+                console.error('欄読み込みエラー', e.target.error);
+                resolve([]);
+            };
+        } catch(e) {
+            console.error('欄読み込みエラー', e);
+            resolve([]);
+        }
     });
 }
 
 function deleteSectionFromDB(id) {
-    if (!db) return;
-    const tx = db.transaction([STORE_NAME_SECTION], 'readwrite');
-    tx.objectStore(STORE_NAME_SECTION).delete(id);
+    if (!db || !db.objectStoreNames.contains(STORE_NAME_SECTION)) return;
+    try {
+        const tx = db.transaction([STORE_NAME_SECTION], 'readwrite');
+        tx.objectStore(STORE_NAME_SECTION).delete(id);
+        tx.onerror = (e) => console.error('欄削除エラー', e.target.error);
+    } catch(e) {
+        console.error('欄削除エラー', e);
+    }
 }
 
 // --- プリセット用DB操作 ---
 function savePresetToDB(preset) {
     return new Promise((resolve, reject) => {
-        if (!db) return reject(new Error('DB not initialized'));
-        const tx = db.transaction([STORE_NAME_PRESET], 'readwrite');
-        tx.objectStore(STORE_NAME_PRESET).put(preset);
-        tx.oncomplete = () => resolve();
-        tx.onerror = (e) => reject(e);
+        if (!db || !db.objectStoreNames.contains(STORE_NAME_PRESET)) return reject(new Error('DB not initialized'));
+        try {
+            const tx = db.transaction([STORE_NAME_PRESET], 'readwrite');
+            tx.objectStore(STORE_NAME_PRESET).put(preset);
+            tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(e.target.error || e);
+        } catch(e) {
+            reject(e);
+        }
     });
 }
 
 function getAllPresets() {
-    return new Promise((resolve, reject) => {
-        if (!db) return resolve([]);
-        const tx = db.transaction([STORE_NAME_PRESET], 'readonly');
-        const req = tx.objectStore(STORE_NAME_PRESET).getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = (e) => reject(e);
+    return new Promise((resolve) => {
+        try {
+            if (!db || !db.objectStoreNames.contains(STORE_NAME_PRESET)) return resolve([]);
+            const tx = db.transaction([STORE_NAME_PRESET], 'readonly');
+            const req = tx.objectStore(STORE_NAME_PRESET).getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = (e) => {
+                console.error('プリセット読み込みエラー', e.target.error);
+                resolve([]);
+            };
+            tx.onerror = (e) => {
+                console.error('プリセット読み込みエラー', e.target.error);
+                resolve([]);
+            };
+        } catch(e) {
+            console.error('プリセット読み込みエラー', e);
+            resolve([]);
+        }
     });
 }
 
 function deletePresetFromDB(id) {
     return new Promise((resolve, reject) => {
-        if (!db) return resolve();
-        const tx = db.transaction([STORE_NAME_PRESET], 'readwrite');
-        tx.objectStore(STORE_NAME_PRESET).delete(id);
-        tx.oncomplete = () => resolve();
-        tx.onerror = (e) => reject(e);
+        if (!db || !db.objectStoreNames.contains(STORE_NAME_PRESET)) return resolve();
+        try {
+            const tx = db.transaction([STORE_NAME_PRESET], 'readwrite');
+            tx.objectStore(STORE_NAME_PRESET).delete(id);
+            tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(e.target.error || e);
+        } catch(e) {
+            reject(e);
+        }
     });
 }
 
 // --- 配信セット用DB操作 ---
 function saveBroadcastSetToDB(broadcastSet) {
     return new Promise((resolve, reject) => {
-        if (!db) return reject(new Error('DB not initialized'));
-        const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
-        tx.objectStore(STORE_NAME_BROADCAST_SET).put(broadcastSet);
-        tx.oncomplete = () => resolve();
-        tx.onerror = (e) => reject(e);
+        if (!db || !db.objectStoreNames.contains(STORE_NAME_BROADCAST_SET)) return reject(new Error('DB not initialized'));
+        try {
+            const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
+            tx.objectStore(STORE_NAME_BROADCAST_SET).put(broadcastSet);
+            tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(e.target.error || e);
+        } catch(e) {
+            reject(e);
+        }
     });
 }
 
 function getAllBroadcastSets() {
-    return new Promise((resolve, reject) => {
-        if (!db) return resolve([]);
-        const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readonly');
-        const req = tx.objectStore(STORE_NAME_BROADCAST_SET).getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = (e) => reject(e);
+    return new Promise((resolve) => {
+        try {
+            if (!db || !db.objectStoreNames.contains(STORE_NAME_BROADCAST_SET)) return resolve([]);
+            const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readonly');
+            const req = tx.objectStore(STORE_NAME_BROADCAST_SET).getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = (e) => {
+                console.error('配信セット読み込みエラー', e.target.error);
+                resolve([]);
+            };
+            tx.onerror = (e) => {
+                console.error('配信セット読み込みエラー', e.target.error);
+                resolve([]);
+            };
+        } catch(e) {
+            console.error('配信セット読み込みエラー', e);
+            resolve([]);
+        }
     });
 }
 
 function deleteBroadcastSetFromDB(id) {
     return new Promise((resolve, reject) => {
-        if (!db) return resolve();
-        const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
-        tx.objectStore(STORE_NAME_BROADCAST_SET).delete(id);
-        tx.oncomplete = () => resolve();
-        tx.onerror = (e) => reject(e);
+        if (!db || !db.objectStoreNames.contains(STORE_NAME_BROADCAST_SET)) return resolve();
+        try {
+            const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
+            tx.objectStore(STORE_NAME_BROADCAST_SET).delete(id);
+            tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(e.target.error || e);
+        } catch(e) {
+            reject(e);
+        }
     });
 }
 
@@ -523,7 +748,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await initDB();
         sections = await getAllSections();
         if (sections.length === 0) {
-            sections = DEFAULT_SECTIONS;
+            sections = resetToDefaultSections();
             sections.forEach(s => saveSection(s.id, s.title, s.style, s.order, s.isCollapsed));
         }
 
@@ -581,41 +806,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         renderAllSections(savedAudioData);
-
-        document.getElementById('add-section-btn').addEventListener('click', async () => {
-            const title = await customPrompt("新しい欄の名前を入力してください\n（例: 「🎤 ゲスト用BGM」「📢 特殊効果音」など）");
-            if (!title || title.trim() === '') return;
-            
-            const newId = 'custom_' + Date.now();
-            const newOrder = sections.length > 0 ? Math.max(...sections.map(s => s.order)) + 1 : 1;
-            const newSec = { id: newId, title: title, style: 'bgm', order: newOrder, isCollapsed: false };
-            
-            sections.push(newSec);
-            sectionCounts[newId] = 0;
-            autoPlayStates[newId] = false;
-            saveSection(newId, title, 'bgm', newOrder, false);
-
-            appendSectionDOM(newSec, []);
-            updateSectionNav();
-        });
-
-        document.getElementById('add-se-section-btn').addEventListener('click', async () => {
-            const title = await customPrompt("効果音の欄の名前を入力してください\n（例: 「💥 効果音①」「🔔 ベル・スイッチ」など）");
-            if (!title || title.trim() === '') return;
-
-            const newId = 'custom_' + Date.now();
-            const newOrder = sections.length > 0 ? Math.max(...sections.map(s => s.order)) + 1 : 1;
-            const newSec = { id: newId, title: title, style: 'pad', order: newOrder, isCollapsed: false };
-
-            sections.push(newSec);
-            sectionCounts[newId] = 0;
-            autoPlayStates[newId] = false;
-            overlapPlayStates[newId] = true;
-            saveSection(newId, title, 'pad', newOrder, false);
-
-            appendSectionDOM(newSec, []);
-            updateSectionNav();
-        });
+        initSectionControls();
 
         initDataTransfer(); // データ引き継ぎ機能の初期化
         initResetButton();  // リセットボタンの初期化
@@ -623,7 +814,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initPreset();       // プリセット機能の初期化
         initBroadcastSetSave(); // 配信セット保存の初期化
     } catch (e) {
-        console.error("データベースエラー", e);
+        await startWithDefaultViewAfterDBError(e);
     }
 });
 
@@ -1346,16 +1537,7 @@ function initResetButton() {
         if (!ok2) return;
 
         // IndexedDB を全消去
-        if (db) {
-            const txAudio = db.transaction([STORE_NAME_AUDIO], 'readwrite');
-            txAudio.objectStore(STORE_NAME_AUDIO).clear();
-            const txSec = db.transaction([STORE_NAME_SECTION], 'readwrite');
-            txSec.objectStore(STORE_NAME_SECTION).clear();
-            const txPreset = db.transaction([STORE_NAME_PRESET], 'readwrite');
-            txPreset.objectStore(STORE_NAME_PRESET).clear();
-            const txBroadcastSet = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
-            txBroadcastSet.objectStore(STORE_NAME_BROADCAST_SET).clear();
-        }
+        const dbDeleted = await deleteAppDatabase();
 
         // localStorage を全消去
         localStorage.removeItem(MEMO_STORAGE_KEY);
@@ -1363,6 +1545,11 @@ function initResetButton() {
         localStorage.removeItem('pondashi_overlap_states');
         localStorage.removeItem('pondashi_volume_migration_v1');
         localStorage.removeItem('pondashi_broadcast_set_migration_v1');
+
+        if (!dbDeleted) {
+            await customAlert('保存データの一部を削除できませんでした。\nオンライン版を開いている他のタブを閉じてから、もう一度お試しください。');
+            return;
+        }
 
         await customAlert('デフォルトに戻しました！\n画面を更新します。');
         location.reload();
