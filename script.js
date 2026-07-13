@@ -3,11 +3,21 @@ const DB_NAME = 'PonDashiAppDB';
 const STORE_NAME_AUDIO = 'AudioFiles';
 const STORE_NAME_SECTION = 'Sections';
 const STORE_NAME_PRESET = 'Presets';
+const DB_VERSION = 4;
 let db;
 
 function initDB() {
+    return openPonDashiDB(DB_VERSION).catch((error) => {
+        if (error?.name === 'VersionError') {
+            return openPonDashiDB();
+        }
+        throw error;
+    });
+}
+
+function openPonDashiDB(version) {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 3);
+        const request = version ? indexedDB.open(DB_NAME, version) : indexedDB.open(DB_NAME);
         request.onupgradeneeded = (e) => {
             db = e.target.result;
             if (!db.objectStoreNames.contains(STORE_NAME_AUDIO)) {
@@ -23,9 +33,14 @@ function initDB() {
         };
         request.onsuccess = (e) => {
             db = e.target.result;
+            db.onversionchange = () => {
+                db.close();
+                db = null;
+            };
             resolve();
         };
-        request.onerror = (e) => reject(e);
+        request.onerror = (e) => reject(e.target.error || e);
+        request.onblocked = () => reject(new Error('IndexedDB upgrade blocked'));
     });
 }
 
