@@ -134,6 +134,57 @@ let templates = [];
 const MEMO_STORAGE_KEY = 'pondashi_current_memo';
 const TEMPLATE_STORAGE_KEY = 'pondashi_templates';
 
+function loadTemplatesFromStorage() {
+    const savedTemplates = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+    if (!savedTemplates) {
+        templates = [];
+        return templates;
+    }
+
+    try {
+        const parsedTemplates = JSON.parse(savedTemplates);
+        templates = Array.isArray(parsedTemplates) ? parsedTemplates : [];
+    } catch(e) {
+        templates = [];
+    }
+
+    return templates;
+}
+
+function saveTemplatesToStorage() {
+    localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+}
+
+function renderTemplateOptions(selectedId = '') {
+    const templateSelect = document.getElementById('template-select');
+    if (!templateSelect) return;
+
+    templateSelect.innerHTML = '<option value="">-- テンプレートを選択 --</option>';
+    templates.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        templateSelect.appendChild(opt);
+    });
+
+    if (selectedId) {
+        templateSelect.value = selectedId;
+    }
+}
+
+function createMemoTemplate(name, content) {
+    const newTemplate = {
+        id: 'tpl_' + Date.now(),
+        name: name.trim(),
+        content
+    };
+
+    templates.push(newTemplate);
+    saveTemplatesToStorage();
+    renderTemplateOptions(newTemplate.id);
+    return newTemplate;
+}
+
 // --- カスタムプロンプト（Electron・デスクトップ版対応用） ---
 function customPrompt(message, defaultValue = '') {
     return new Promise((resolve) => {
@@ -340,24 +391,7 @@ function initMemo() {
     });
 
     // テンプレートの読み込み
-    const savedTemplates = localStorage.getItem(TEMPLATE_STORAGE_KEY);
-    if (savedTemplates) {
-        try {
-            templates = JSON.parse(savedTemplates);
-        } catch(e) {
-            templates = [];
-        }
-    }
-
-    function renderTemplateOptions() {
-        templateSelect.innerHTML = '<option value="">-- テンプレートを選択 --</option>';
-        templates.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.name;
-            templateSelect.appendChild(opt);
-        });
-    }
+    loadTemplatesFromStorage();
     renderTemplateOptions();
 
     // 読み込み
@@ -381,15 +415,7 @@ function initMemo() {
         const name = await customPrompt('新しいテンプレートの名前を入力してください\n（例: 雑談枠用、ゲーム配信枠用 など）');
         if (!name || name.trim() === '') return;
         
-        const newTemplate = {
-            id: 'tpl_' + Date.now(),
-            name: name.trim(),
-            content: memoArea.value
-        };
-        templates.push(newTemplate);
-        localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
-        renderTemplateOptions();
-        templateSelect.value = newTemplate.id;
+        const newTemplate = createMemoTemplate(name.trim(), memoArea.value);
         await customAlert(`テンプレート「${newTemplate.name}」を保存しました！`);
     });
 
@@ -404,7 +430,7 @@ function initMemo() {
             const ok = await customConfirm(`「${t.name}」を現在のメモ内容で上書きしますか？`);
             if (ok) {
                 t.content = memoArea.value;
-                localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+                saveTemplatesToStorage();
                 await customAlert('上書き保存しました！');
             }
         }
@@ -420,7 +446,7 @@ function initMemo() {
             const ok = await customConfirm(`本当にテンプレート「${t.name}」を削除しますか？`);
             if (ok) {
                 templates = templates.filter(x => x.id !== id);
-                localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+                saveTemplatesToStorage();
                 renderTemplateOptions();
                 await customAlert('テンプレートを削除しました。');
             }
@@ -539,6 +565,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initResetButton();  // リセットボタンの初期化
         initGlobalVolume(); // 一括音量設定の初期化
         initPreset();       // プリセット機能の初期化
+        initBroadcastSetSave(); // メモテンプレート＋プリセット同時保存の初期化
     } catch (e) {
         console.error("データベースエラー", e);
     }
@@ -1258,6 +1285,76 @@ function initResetButton() {
     });
 }
 
+function getStoredObject(key) {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(key) || '{}');
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch(e) {
+        return {};
+    }
+}
+
+async function buildScenePreset(name, basePreset = null) {
+    const now = new Date().toISOString();
+    const allSections  = await getAllSections();
+    const allAudioData = await getAllData(); // Fileオブジェクトごと保存
+
+    return {
+        ...(basePreset || {}),
+        id:            basePreset?.id || 'preset_' + Date.now(),
+        name:          name.trim(),
+        createdAt:     basePreset?.createdAt || now,
+        updatedAt:     now,
+        sections:      allSections,
+        audioData:     allAudioData,
+        overlapStates: getStoredObject('pondashi_overlap_states'),
+        navVisibility: getStoredObject('pondashi_nav_visibility'),
+    };
+}
+
+function initBroadcastSetSave() {
+    const saveSetBtn = document.getElementById('save-broadcast-set-btn');
+    if (!saveSetBtn) return;
+
+    saveSetBtn.addEventListener('click', async () => {
+        const memoArea = document.getElementById('memo-area');
+        if (!memoArea || memoArea.value.trim() === '') {
+            await customAlert('メモが空です。保存する段取りメモを入力してください。');
+            return;
+        }
+
+        const name = await customPrompt(
+            '配信セットの名前を入力してください\n同じ名前でメモテンプレートと音源プリセットを保存します。\n（例: 7/13 Sunoパ本番、ゲスト回用 など）'
+        );
+        if (!name || name.trim() === '') return;
+
+        try {
+            saveSetBtn.textContent = '保存中...';
+            saveSetBtn.disabled = true;
+
+            const trimmedName = name.trim();
+            const preset = await buildScenePreset(trimmedName);
+            await savePresetToDB(preset);
+
+            const template = createMemoTemplate(trimmedName, memoArea.value);
+            if (typeof window.refreshPresetOptions === 'function') {
+                await window.refreshPresetOptions(preset.id);
+            }
+
+            await customAlert(
+                `配信セット「${trimmedName}」を保存しました！\n` +
+                `メモテンプレート「${template.name}」と音源プリセット「${preset.name}」に追加しました。`
+            );
+        } catch(e) {
+            console.error('配信セット保存エラー', e);
+            await customAlert('保存に失敗しました。\nエラー: ' + (e?.message || String(e)));
+        } finally {
+            saveSetBtn.textContent = '新規保存';
+            saveSetBtn.disabled = false;
+        }
+    });
+}
+
 // --- シーンプリセット機能 ---
 function initPreset() {
     const presetSelect    = document.getElementById('preset-select');
@@ -1305,6 +1402,13 @@ function initPreset() {
         });
     }
 
+    window.refreshPresetOptions = async (selectedPresetId = '') => {
+        await loadPresets();
+        if (selectedPresetId) {
+            presetSelect.value = selectedPresetId;
+        }
+    };
+
     // 新規保存
     savePresetBtn.addEventListener('click', async () => {
         const name = await customPrompt(
@@ -1316,19 +1420,7 @@ function initPreset() {
             savePresetBtn.textContent = '保存中...';
             savePresetBtn.disabled = true;
 
-            const allSections  = await getAllSections();
-            const allAudioData = await getAllData(); // Fileオブジェクトごと保存
-
-            const preset = {
-                id:           'preset_' + Date.now(),
-                name:         name.trim(),
-                createdAt:    new Date().toISOString(),
-                sections:     allSections,
-                audioData:    allAudioData,
-                overlapStates: (() => { try { return JSON.parse(localStorage.getItem('pondashi_overlap_states') || '{}'); } catch(e) { return {}; } })(),
-                navVisibility: (() => { try { return JSON.parse(localStorage.getItem('pondashi_nav_visibility') || '{}'); } catch(e) { return {}; } })(),
-            };
-
+            const preset = await buildScenePreset(name.trim());
             await savePresetToDB(preset);
             await loadPresets();
             presetSelect.value = preset.id;
@@ -1356,17 +1448,7 @@ function initPreset() {
             updatePresetBtn.textContent = '保存中...';
             updatePresetBtn.disabled = true;
 
-            const allSections  = await getAllSections();
-            const allAudioData = await getAllData();
-
-            const updated = {
-                ...p,
-                sections:     allSections,
-                audioData:    allAudioData,
-                overlapStates: (() => { try { return JSON.parse(localStorage.getItem('pondashi_overlap_states') || '{}'); } catch(e) { return {}; } })(),
-                navVisibility: (() => { try { return JSON.parse(localStorage.getItem('pondashi_nav_visibility') || '{}'); } catch(e) { return {}; } })(),
-            };
-
+            const updated = await buildScenePreset(p.name, p);
             await savePresetToDB(updated);
             await loadPresets();
             presetSelect.value = id;

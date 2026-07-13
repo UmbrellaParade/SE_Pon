@@ -107,6 +107,12 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
                     <p style="margin: 0;">パソコンに入っている音声ファイルを選択して再生できます。</p>
                     <div style="display: flex; gap: 10px; flex-shrink: 0; margin-left: 20px; align-items: center;">
+                        <!-- 配信セット保存 -->
+                        <div id="broadcast-set-save-ctrl" style="background: #2d241a; border: 1px solid #6b4b22; border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 150px;">
+                            <div style="font-size: 0.75em; color: #f5d7a1; text-align: center; font-weight: bold; margin-bottom: 2px;">💾 配信セット保存</div>
+                            <div style="font-size: 0.7em; color: #b79b73; white-space: nowrap;">メモ＋音源プリセット</div>
+                            <button id="save-broadcast-set-btn" class="tpl-btn" style="padding: 5px 8px; cursor: pointer; background: #f39c12; color: #121212; border: none; border-radius: 4px; font-size: 0.85em; font-weight: bold;">新規保存</button>
+                        </div>
                         <!-- シーンプリセット -->
                         <div id="preset-ctrl" style="background: #2a2a2a; border: 1px solid #444; border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px;">
                             <div style="font-size: 0.75em; color: #aaa; text-align: center; font-weight: bold; margin-bottom: 2px;">🎭 シーンプリセット</div>
@@ -142,12 +148,14 @@
                             </div>
                             <button id="global-vol-apply-btn" style="padding: 5px 8px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em; font-weight: bold; margin-top: 2px;">一括設定</button>
                         </div>
-                        <button id="add-section-btn" style="padding: 10px 20px; font-size: 1.1em; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s; white-space: nowrap;">
-                            + 新しい欄を追加
-                        </button>
-                        <button id="add-se-section-btn" style="padding: 10px 20px; font-size: 1.1em; background-color: #e91e8c; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s; white-space: nowrap;">
-                            + 効果音の欄を追加
-                        </button>
+                        <div style="display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;">
+                            <button id="add-section-btn" style="padding: 7px 14px; font-size: 0.95em; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; box-shadow: 0 3px 5px rgba(0,0,0,0.3); transition: transform 0.1s; white-space: nowrap; min-width: 150px;">
+                                + 新しい欄を追加
+                            </button>
+                            <button id="add-se-section-btn" style="padding: 7px 14px; font-size: 0.95em; background-color: #e91e8c; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; box-shadow: 0 3px 5px rgba(0,0,0,0.3); transition: transform 0.1s; white-space: nowrap; min-width: 150px;">
+                                + 効果音の欄を追加
+                            </button>
+                        </div>
                     </div>
                 </div>
             </header>
