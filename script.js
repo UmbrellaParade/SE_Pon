@@ -3,12 +3,11 @@ const DB_NAME = 'PonDashiAppDB';
 const STORE_NAME_AUDIO = 'AudioFiles';
 const STORE_NAME_SECTION = 'Sections';
 const STORE_NAME_PRESET = 'Presets';
-const STORE_NAME_BROADCAST_SET = 'BroadcastSets';
 let db;
 
 function initDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 4);
+        const request = indexedDB.open(DB_NAME, 3);
         request.onupgradeneeded = (e) => {
             db = e.target.result;
             if (!db.objectStoreNames.contains(STORE_NAME_AUDIO)) {
@@ -21,10 +20,6 @@ function initDB() {
             if (!db.objectStoreNames.contains(STORE_NAME_PRESET)) {
                 db.createObjectStore(STORE_NAME_PRESET, { keyPath: 'id' });
             }
-            // v4で追加：メモ＋音源プリセットをまとめた配信セット
-            if (!db.objectStoreNames.contains(STORE_NAME_BROADCAST_SET)) {
-                db.createObjectStore(STORE_NAME_BROADCAST_SET, { keyPath: 'id' });
-            }
         };
         request.onsuccess = (e) => {
             db = e.target.result;
@@ -35,30 +30,10 @@ function initDB() {
 }
 
 function saveData(id, file, fileName, volume, loop, mcVolume = 0.1) {
-    return new Promise((resolve) => {
-        if (!db) {
-            console.error('音声保存エラー: DB not initialized');
-            return resolve(false);
-        }
-
-        try {
-            const transaction = db.transaction([STORE_NAME_AUDIO], 'readwrite');
-            const store = transaction.objectStore(STORE_NAME_AUDIO);
-            store.put({ id, file, fileName, volume, loop, mcVolume });
-            transaction.oncomplete = () => resolve(true);
-            transaction.onerror = (e) => {
-                console.error('音声保存エラー', e.target.error);
-                resolve(false);
-            };
-            transaction.onabort = (e) => {
-                console.error('音声保存中断', e.target.error);
-                resolve(false);
-            };
-        } catch(e) {
-            console.error('音声保存エラー', e);
-            resolve(false);
-        }
-    });
+    if (!db) return;
+    const transaction = db.transaction([STORE_NAME_AUDIO], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME_AUDIO);
+    store.put({ id, file, fileName, volume, loop, mcVolume });
 }
 
 function getAllData() {
@@ -147,37 +122,6 @@ function deletePresetFromDB(id) {
     });
 }
 
-// --- 配信セット用DB操作 ---
-function saveBroadcastSetToDB(broadcastSet) {
-    return new Promise((resolve, reject) => {
-        if (!db) return reject(new Error('DB not initialized'));
-        const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
-        tx.objectStore(STORE_NAME_BROADCAST_SET).put(broadcastSet);
-        tx.oncomplete = () => resolve();
-        tx.onerror = (e) => reject(e);
-    });
-}
-
-function getAllBroadcastSets() {
-    return new Promise((resolve, reject) => {
-        if (!db) return resolve([]);
-        const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readonly');
-        const req = tx.objectStore(STORE_NAME_BROADCAST_SET).getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = (e) => reject(e);
-    });
-}
-
-function deleteBroadcastSetFromDB(id) {
-    return new Promise((resolve, reject) => {
-        if (!db) return resolve();
-        const tx = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
-        tx.objectStore(STORE_NAME_BROADCAST_SET).delete(id);
-        tx.oncomplete = () => resolve();
-        tx.onerror = (e) => reject(e);
-    });
-}
-
 // --- メイン処理 ---
 let sections = [];
 let sectionCounts = {};
@@ -189,57 +133,6 @@ let navVisibilityStates = {}; // 目次に表示の設定
 let templates = [];
 const MEMO_STORAGE_KEY = 'pondashi_current_memo';
 const TEMPLATE_STORAGE_KEY = 'pondashi_templates';
-
-function loadTemplatesFromStorage() {
-    const savedTemplates = localStorage.getItem(TEMPLATE_STORAGE_KEY);
-    if (!savedTemplates) {
-        templates = [];
-        return templates;
-    }
-
-    try {
-        const parsedTemplates = JSON.parse(savedTemplates);
-        templates = Array.isArray(parsedTemplates) ? parsedTemplates : [];
-    } catch(e) {
-        templates = [];
-    }
-
-    return templates;
-}
-
-function saveTemplatesToStorage() {
-    localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
-}
-
-function renderTemplateOptions(selectedId = '') {
-    const templateSelect = document.getElementById('template-select');
-    if (!templateSelect) return;
-
-    templateSelect.innerHTML = '<option value="">-- テンプレートを選択 --</option>';
-    templates.forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = t.id;
-        opt.textContent = t.name;
-        templateSelect.appendChild(opt);
-    });
-
-    if (selectedId) {
-        templateSelect.value = selectedId;
-    }
-}
-
-function createMemoTemplate(name, content) {
-    const newTemplate = {
-        id: 'tpl_' + Date.now(),
-        name: name.trim(),
-        content
-    };
-
-    templates.push(newTemplate);
-    saveTemplatesToStorage();
-    renderTemplateOptions(newTemplate.id);
-    return newTemplate;
-}
 
 // --- カスタムプロンプト（Electron・デスクトップ版対応用） ---
 function customPrompt(message, defaultValue = '') {
@@ -447,7 +340,24 @@ function initMemo() {
     });
 
     // テンプレートの読み込み
-    loadTemplatesFromStorage();
+    const savedTemplates = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+    if (savedTemplates) {
+        try {
+            templates = JSON.parse(savedTemplates);
+        } catch(e) {
+            templates = [];
+        }
+    }
+
+    function renderTemplateOptions() {
+        templateSelect.innerHTML = '<option value="">-- テンプレートを選択 --</option>';
+        templates.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            templateSelect.appendChild(opt);
+        });
+    }
     renderTemplateOptions();
 
     // 読み込み
@@ -471,7 +381,15 @@ function initMemo() {
         const name = await customPrompt('新しいテンプレートの名前を入力してください\n（例: 雑談枠用、ゲーム配信枠用 など）');
         if (!name || name.trim() === '') return;
         
-        const newTemplate = createMemoTemplate(name.trim(), memoArea.value);
+        const newTemplate = {
+            id: 'tpl_' + Date.now(),
+            name: name.trim(),
+            content: memoArea.value
+        };
+        templates.push(newTemplate);
+        localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+        renderTemplateOptions();
+        templateSelect.value = newTemplate.id;
         await customAlert(`テンプレート「${newTemplate.name}」を保存しました！`);
     });
 
@@ -486,7 +404,7 @@ function initMemo() {
             const ok = await customConfirm(`「${t.name}」を現在のメモ内容で上書きしますか？`);
             if (ok) {
                 t.content = memoArea.value;
-                saveTemplatesToStorage();
+                localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
                 await customAlert('上書き保存しました！');
             }
         }
@@ -502,7 +420,7 @@ function initMemo() {
             const ok = await customConfirm(`本当にテンプレート「${t.name}」を削除しますか？`);
             if (ok) {
                 templates = templates.filter(x => x.id !== id);
-                saveTemplatesToStorage();
+                localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
                 renderTemplateOptions();
                 await customAlert('テンプレートを削除しました。');
             }
@@ -621,7 +539,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         initResetButton();  // リセットボタンの初期化
         initGlobalVolume(); // 一括音量設定の初期化
         initPreset();       // プリセット機能の初期化
-        initBroadcastSetSave(); // 配信セット保存の初期化
     } catch (e) {
         console.error("データベースエラー", e);
     }
@@ -913,10 +830,8 @@ function createItem(index, secId, style, container, initialData = null) {
     let mcBtnHtml = '';
     if (style !== 'pad') {
         mcHtml = `
-            <span style="margin-left:6px; font-size:0.9em; white-space:nowrap;">MC時</span>
-            <button class="mc-vol-down-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">◀</button>
-            <input type="range" min="0" max="1" step="0.01" value="${mcVolume}" class="mc-vol-slider" style="flex:none; width:48px;">
-            <button class="mc-vol-up-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">▶</button>
+            <span style="margin-left:10px; font-size:0.9em;">MC時</span>
+            <input type="range" min="0" max="1" step="0.01" value="${mcVolume}" class="mc-vol-slider" style="width:60px;">
         `;
         mcBtnHtml = `<button class="mc-btn">🎤 MC(音量下げる)</button>`;
     }
@@ -934,11 +849,9 @@ function createItem(index, secId, style, container, initialData = null) {
             ${currentFileName}
         </div>
         <input type="file" accept="audio/*" class="file-input">
-        <div class="volume-control" style="gap:4px;">
+        <div class="volume-control">
             <span>音量</span>
-            <button class="vol-down-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">◀</button>
             <input type="range" min="0" max="1" step="0.01" value="${baseVolume}" class="vol-slider">
-            <button class="vol-up-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">▶</button>
             ${mcHtml}
         </div>
         <div class="controls">
@@ -971,10 +884,6 @@ function createItem(index, secId, style, container, initialData = null) {
     const timeDisplay = item.querySelector('.time-display');
     const volSlider = item.querySelector('.vol-slider');
     const mcVolSlider = item.querySelector('.mc-vol-slider');
-    const volDownBtn = item.querySelector('.vol-down-btn');
-    const volUpBtn = item.querySelector('.vol-up-btn');
-    const mcVolDownBtn = item.querySelector('.mc-vol-down-btn');
-    const mcVolUpBtn = item.querySelector('.mc-vol-up-btn');
     const repeatCheck = item.querySelector('.repeat-check');
     const deleteBtn = item.querySelector('.delete-btn');
 
@@ -1121,23 +1030,6 @@ function createItem(index, secId, style, container, initialData = null) {
             updateDB();
         });
     }
-
-    const stepVol = (delta) => {
-        baseVolume = Math.min(1, Math.max(0, Math.round((baseVolume + delta) * 100) / 100));
-        volSlider.value = baseVolume;
-        if (!isMCMode) audio.volume = baseVolume;
-        updateDB();
-    };
-    const stepMcVol = (delta) => {
-        mcVolume = Math.min(1, Math.max(0, Math.round((mcVolume + delta) * 100) / 100));
-        if (mcVolSlider) mcVolSlider.value = mcVolume;
-        if (isMCMode) audio.volume = mcVolume;
-        updateDB();
-    };
-    volDownBtn?.addEventListener('click', () => stepVol(-0.01));
-    volUpBtn?.addEventListener('click', () => stepVol(0.01));
-    mcVolDownBtn?.addEventListener('click', () => stepMcVol(-0.01));
-    mcVolUpBtn?.addEventListener('click', () => stepMcVol(0.01));
 
     audio.addEventListener('play', () => {
         item.classList.add('playing');
@@ -1340,7 +1232,7 @@ function initResetButton() {
     if (!resetBtn) return;
 
     resetBtn.addEventListener('click', async () => {
-        const ok1 = await customConfirm('アプリをデフォルト状態に戻しますか？\n設定した音声ファイル・欄の構成・メモ・テンプレート・プリセット・配信セットがすべて削除されます。');
+        const ok1 = await customConfirm('アプリをデフォルト状態に戻しますか？\n設定した音声ファイル・欄の構成・メモ・テンプレートがすべて削除されます。');
         if (!ok1) return;
         const ok2 = await customConfirm('本当によろしいですか？\nこの操作は元に戻せません。');
         if (!ok2) return;
@@ -1353,8 +1245,6 @@ function initResetButton() {
             txSec.objectStore(STORE_NAME_SECTION).clear();
             const txPreset = db.transaction([STORE_NAME_PRESET], 'readwrite');
             txPreset.objectStore(STORE_NAME_PRESET).clear();
-            const txBroadcastSet = db.transaction([STORE_NAME_BROADCAST_SET], 'readwrite');
-            txBroadcastSet.objectStore(STORE_NAME_BROADCAST_SET).clear();
         }
 
         // localStorage を全消去
@@ -1362,270 +1252,10 @@ function initResetButton() {
         localStorage.removeItem(TEMPLATE_STORAGE_KEY);
         localStorage.removeItem('pondashi_overlap_states');
         localStorage.removeItem('pondashi_volume_migration_v1');
-        localStorage.removeItem('pondashi_broadcast_set_migration_v1');
 
         await customAlert('デフォルトに戻しました！\n画面を更新します。');
         location.reload();
     });
-}
-
-function getStoredObject(key) {
-    try {
-        const parsed = JSON.parse(localStorage.getItem(key) || '{}');
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch(e) {
-        return {};
-    }
-}
-
-async function buildScenePreset(name, basePreset = null) {
-    const now = new Date().toISOString();
-    const allSections  = await getAllSections();
-    const allAudioData = await getAllData(); // Fileオブジェクトごと保存
-
-    return {
-        ...(basePreset || {}),
-        id:            basePreset?.id || 'preset_' + Date.now(),
-        name:          name.trim(),
-        createdAt:     basePreset?.createdAt || now,
-        updatedAt:     now,
-        sections:      allSections,
-        audioData:     allAudioData,
-        overlapStates: getStoredObject('pondashi_overlap_states'),
-        navVisibility: getStoredObject('pondashi_nav_visibility'),
-    };
-}
-
-async function buildBroadcastSet(name, memoContent, baseSet = null) {
-    const now = new Date().toISOString();
-    const allSections  = await getAllSections();
-    const allAudioData = await getAllData(); // Fileオブジェクトごと保存
-
-    return {
-        ...(baseSet || {}),
-        id:            baseSet?.id || 'broadcast_set_' + Date.now(),
-        name:          name.trim(),
-        createdAt:     baseSet?.createdAt || now,
-        updatedAt:     now,
-        memo:          memoContent,
-        sections:      allSections,
-        audioData:     allAudioData,
-        overlapStates: getStoredObject('pondashi_overlap_states'),
-        navVisibility: getStoredObject('pondashi_nav_visibility'),
-    };
-}
-
-function getTimestampFromId(id) {
-    const match = String(id || '').match(/_(\d+)$/);
-    return match ? Number(match[1]) : 0;
-}
-
-async function restoreSceneData(savedSet) {
-    await new Promise((resolve, reject) => {
-        const tx = db.transaction([STORE_NAME_SECTION], 'readwrite');
-        const store = tx.objectStore(STORE_NAME_SECTION);
-        store.clear();
-        (savedSet.sections || []).forEach(s => store.put(s));
-        tx.oncomplete = () => resolve();
-        tx.onerror = (e) => reject(e);
-    });
-
-    await new Promise((resolve, reject) => {
-        const tx = db.transaction([STORE_NAME_AUDIO], 'readwrite');
-        const store = tx.objectStore(STORE_NAME_AUDIO);
-        store.clear();
-        (savedSet.audioData || []).forEach(a => store.put(a));
-        tx.oncomplete = () => resolve();
-        tx.onerror = (e) => reject(e);
-    });
-
-    if (savedSet.overlapStates) localStorage.setItem('pondashi_overlap_states', JSON.stringify(savedSet.overlapStates));
-    if (savedSet.navVisibility) localStorage.setItem('pondashi_nav_visibility', JSON.stringify(savedSet.navVisibility));
-}
-
-async function migrateSplitBroadcastSetsOnce() {
-    const MIGRATION_KEY = 'pondashi_broadcast_set_migration_v1';
-    if (localStorage.getItem(MIGRATION_KEY) === '1') return;
-
-    try {
-        loadTemplatesFromStorage();
-        const [existingSets, presets] = await Promise.all([getAllBroadcastSets(), getAllPresets()]);
-        const existingNames = new Set(existingSets.map(s => s.name));
-        const candidates = [];
-
-        templates.forEach(template => {
-            const templateTime = getTimestampFromId(template.id);
-            if (!template.name || !templateTime || existingNames.has(template.name)) return;
-
-            const matchingPreset = presets.find(p => {
-                const presetTime = getTimestampFromId(p.id) || Date.parse(p.createdAt || '');
-                return p.name === template.name &&
-                       presetTime &&
-                       Math.abs(presetTime - templateTime) <= 30 * 60 * 1000;
-            });
-
-            if (matchingPreset) {
-                candidates.push({ template, preset: matchingPreset });
-                existingNames.add(template.name);
-            }
-        });
-
-        for (let i = 0; i < candidates.length; i++) {
-            const { template, preset } = candidates[i];
-            await saveBroadcastSetToDB({
-                id: 'broadcast_set_migrated_' + Date.now() + '_' + i,
-                name: template.name,
-                createdAt: preset.createdAt || new Date(getTimestampFromId(template.id)).toISOString(),
-                updatedAt: new Date().toISOString(),
-                memo: template.content || '',
-                sections: preset.sections || [],
-                audioData: preset.audioData || [],
-                overlapStates: preset.overlapStates || {},
-                navVisibility: preset.navVisibility || {},
-                migratedFromSplitSave: true
-            });
-        }
-    } catch(e) {
-        console.warn('配信セット移行エラー', e);
-    } finally {
-        localStorage.setItem(MIGRATION_KEY, '1');
-    }
-}
-
-function initBroadcastSetSave() {
-    const broadcastSetSelect = document.getElementById('broadcast-set-select');
-    const loadSetBtn = document.getElementById('load-broadcast-set-btn');
-    const saveSetBtn = document.getElementById('save-broadcast-set-btn');
-    const updateSetBtn = document.getElementById('update-broadcast-set-btn');
-    const deleteSetBtn = document.getElementById('delete-broadcast-set-btn');
-
-    if (!broadcastSetSelect || !saveSetBtn) return;
-
-    let broadcastSetList = [];
-
-    async function loadBroadcastSets(selectedId = '') {
-        await migrateSplitBroadcastSetsOnce();
-        broadcastSetList = await getAllBroadcastSets();
-        broadcastSetList.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        renderBroadcastSetOptions(selectedId);
-    }
-
-    function renderBroadcastSetOptions(selectedId = '') {
-        broadcastSetSelect.innerHTML = '<option value="">-- セットを選択 --</option>';
-        broadcastSetList.forEach(set => {
-            const opt = document.createElement('option');
-            opt.value = set.id;
-            opt.textContent = set.name;
-            broadcastSetSelect.appendChild(opt);
-        });
-
-        if (selectedId) {
-            broadcastSetSelect.value = selectedId;
-        }
-    }
-
-    saveSetBtn.addEventListener('click', async () => {
-        const memoArea = document.getElementById('memo-area');
-        if (!memoArea || memoArea.value.trim() === '') {
-            await customAlert('メモが空です。保存する段取りメモを入力してください。');
-            return;
-        }
-
-        const name = await customPrompt(
-            '配信セットの名前を入力してください\nメモ・音源・欄構成をまとめて保存します。\n（例: 7/13 Sunoパ本番、ゲスト回用 など）'
-        );
-        if (!name || name.trim() === '') return;
-
-        try {
-            saveSetBtn.textContent = '保存中...';
-            saveSetBtn.disabled = true;
-
-            const trimmedName = name.trim();
-            const broadcastSet = await buildBroadcastSet(trimmedName, memoArea.value);
-            await saveBroadcastSetToDB(broadcastSet);
-            await loadBroadcastSets(broadcastSet.id);
-
-            await customAlert(`配信セット「${trimmedName}」を保存しました！`);
-        } catch(e) {
-            console.error('配信セット保存エラー', e);
-            await customAlert('保存に失敗しました。\nエラー: ' + (e?.message || String(e)));
-        } finally {
-            saveSetBtn.textContent = '新規保存';
-            saveSetBtn.disabled = false;
-        }
-    });
-
-    updateSetBtn?.addEventListener('click', async () => {
-        const id = broadcastSetSelect.value;
-        if (!id) { await customAlert('上書きする配信セットを選択してください。'); return; }
-
-        const memoArea = document.getElementById('memo-area');
-        if (!memoArea || memoArea.value.trim() === '') {
-            await customAlert('メモが空です。');
-            return;
-        }
-
-        const currentSet = broadcastSetList.find(x => x.id === id);
-        if (!currentSet) return;
-
-        const ok = await customConfirm(`「${currentSet.name}」を現在のメモ・音源・欄構成で上書きしますか？`);
-        if (!ok) return;
-
-        try {
-            updateSetBtn.textContent = '保存中...';
-            updateSetBtn.disabled = true;
-
-            const updated = await buildBroadcastSet(currentSet.name, memoArea.value, currentSet);
-            await saveBroadcastSetToDB(updated);
-            await loadBroadcastSets(id);
-            await customAlert('上書き保存しました！');
-        } catch(e) {
-            console.error('配信セット上書きエラー', e);
-            await customAlert('保存に失敗しました。\nエラー: ' + (e?.message || String(e)));
-        } finally {
-            updateSetBtn.textContent = '上書き';
-            updateSetBtn.disabled = false;
-        }
-    });
-
-    loadSetBtn?.addEventListener('click', async () => {
-        const id = broadcastSetSelect.value;
-        if (!id) { await customAlert('読み込む配信セットを選択してください。'); return; }
-
-        const savedSet = broadcastSetList.find(x => x.id === id);
-        if (!savedSet) return;
-
-        const ok = await customConfirm(`「${savedSet.name}」を読み込みます。\n現在のメモ・音源・欄構成は上書きされます。よろしいですか？`);
-        if (!ok) return;
-
-        try {
-            localStorage.setItem(MEMO_STORAGE_KEY, savedSet.memo || '');
-            await restoreSceneData(savedSet);
-
-            await customAlert(`「${savedSet.name}」を読み込みました！\n画面を更新します。`);
-            location.reload();
-        } catch(e) {
-            console.error('配信セット読込エラー', e);
-            await customAlert('読み込みに失敗しました。\nエラー: ' + (e?.message || String(e)));
-        }
-    });
-
-    deleteSetBtn?.addEventListener('click', async () => {
-        const id = broadcastSetSelect.value;
-        if (!id) { await customAlert('削除する配信セットを選択してください。'); return; }
-
-        const savedSet = broadcastSetList.find(x => x.id === id);
-        if (!savedSet) return;
-
-        const ok = await customConfirm(`本当に配信セット「${savedSet.name}」を削除しますか？`);
-        if (!ok) return;
-
-        await deleteBroadcastSetFromDB(id);
-        await loadBroadcastSets();
-        await customAlert('配信セットを削除しました。');
-    });
-
-    loadBroadcastSets();
 }
 
 // --- シーンプリセット機能 ---
@@ -1675,13 +1305,6 @@ function initPreset() {
         });
     }
 
-    window.refreshPresetOptions = async (selectedPresetId = '') => {
-        await loadPresets();
-        if (selectedPresetId) {
-            presetSelect.value = selectedPresetId;
-        }
-    };
-
     // 新規保存
     savePresetBtn.addEventListener('click', async () => {
         const name = await customPrompt(
@@ -1693,7 +1316,19 @@ function initPreset() {
             savePresetBtn.textContent = '保存中...';
             savePresetBtn.disabled = true;
 
-            const preset = await buildScenePreset(name.trim());
+            const allSections  = await getAllSections();
+            const allAudioData = await getAllData(); // Fileオブジェクトごと保存
+
+            const preset = {
+                id:           'preset_' + Date.now(),
+                name:         name.trim(),
+                createdAt:    new Date().toISOString(),
+                sections:     allSections,
+                audioData:    allAudioData,
+                overlapStates: (() => { try { return JSON.parse(localStorage.getItem('pondashi_overlap_states') || '{}'); } catch(e) { return {}; } })(),
+                navVisibility: (() => { try { return JSON.parse(localStorage.getItem('pondashi_nav_visibility') || '{}'); } catch(e) { return {}; } })(),
+            };
+
             await savePresetToDB(preset);
             await loadPresets();
             presetSelect.value = preset.id;
@@ -1721,7 +1356,17 @@ function initPreset() {
             updatePresetBtn.textContent = '保存中...';
             updatePresetBtn.disabled = true;
 
-            const updated = await buildScenePreset(p.name, p);
+            const allSections  = await getAllSections();
+            const allAudioData = await getAllData();
+
+            const updated = {
+                ...p,
+                sections:     allSections,
+                audioData:    allAudioData,
+                overlapStates: (() => { try { return JSON.parse(localStorage.getItem('pondashi_overlap_states') || '{}'); } catch(e) { return {}; } })(),
+                navVisibility: (() => { try { return JSON.parse(localStorage.getItem('pondashi_nav_visibility') || '{}'); } catch(e) { return {}; } })(),
+            };
+
             await savePresetToDB(updated);
             await loadPresets();
             presetSelect.value = id;
@@ -1796,93 +1441,6 @@ function initPreset() {
     loadPresets();
 }
 
-function blobToDataUrl(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(blob);
-    });
-}
-
-function dataUrlToFile(dataUrl, fileName = 'audio', type = '', lastModified = Date.now()) {
-    const parts = dataUrl.split(',');
-    const metaMatch = parts[0].match(/:(.*?);/);
-    const mime = type || (metaMatch ? metaMatch[1] : 'application/octet-stream');
-    const binary = atob(parts[1] || '');
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-    }
-    return new File([bytes], fileName, { type: mime, lastModified });
-}
-
-async function serializeAudioEntry(entry, fileLibrary) {
-    const serialized = { ...entry };
-    const fileObj = entry?.file;
-    delete serialized.file;
-
-    if (fileObj instanceof Blob) {
-        const name = fileObj.name || entry.fileName || 'audio';
-        const type = fileObj.type || '';
-        const size = fileObj.size || 0;
-        const lastModified = fileObj.lastModified || 0;
-        const fileKey = [name, size, type, lastModified].join('|');
-
-        if (!fileLibrary[fileKey]) {
-            fileLibrary[fileKey] = {
-                name,
-                type,
-                size,
-                lastModified,
-                dataUrl: await blobToDataUrl(fileObj)
-            };
-        }
-
-        serialized.fileRef = fileKey;
-        serialized.fileName = serialized.fileName || name;
-    }
-
-    return serialized;
-}
-
-async function serializeSceneLikeEntry(entry, fileLibrary) {
-    const serialized = { ...entry };
-    serialized.audioData = await Promise.all((entry.audioData || []).map(a => serializeAudioEntry(a, fileLibrary)));
-    return serialized;
-}
-
-function deserializeAudioEntry(entry, fileLibrary) {
-    const restored = { ...entry };
-    let fileObj = null;
-
-    if (entry.fileRef && fileLibrary?.[entry.fileRef]?.dataUrl) {
-        const fileInfo = fileLibrary[entry.fileRef];
-        fileObj = dataUrlToFile(fileInfo.dataUrl, fileInfo.name || entry.fileName, fileInfo.type || '', fileInfo.lastModified || Date.now());
-    } else if (entry.fileDataUrl) {
-        fileObj = dataUrlToFile(entry.fileDataUrl, entry.fileName || 'audio');
-    }
-
-    delete restored.fileRef;
-    delete restored.fileDataUrl;
-    restored.file = fileObj;
-    restored.fileName = restored.fileName || fileObj?.name || '';
-    return restored;
-}
-
-function restoreObjectStore(storeName, items) {
-    return new Promise((resolve, reject) => {
-        if (!db || !db.objectStoreNames.contains(storeName)) return resolve();
-
-        const tx = db.transaction([storeName], 'readwrite');
-        const store = tx.objectStore(storeName);
-        store.clear();
-        (items || []).forEach(item => store.put(item));
-        tx.oncomplete = () => resolve();
-        tx.onerror = (e) => reject(e);
-    });
-}
-
 // --- データ引き継ぎ（エクスポート・インポート）機能 ---
 function initDataTransfer() {
     const exportBtn = document.getElementById('export-btn');
@@ -1890,20 +1448,25 @@ function initDataTransfer() {
 
     if (!exportBtn || !importInput) return;
 
-    // 書き出し機能：音声ファイル本体も含めて、オンライン版へそのまま移せる完全バックアップを作る。
+    // 書き出し機能
+    // ※音声ファイル本体は含めず「設定情報のみ」を書き出す。
+    //   音声ファイルはPCに残っているため、読み込み後に再選択するだけで復元できる。
     exportBtn.addEventListener('click', async () => {
         try {
             exportBtn.textContent = "書き出し中...";
             exportBtn.disabled = true;
 
-            const fileLibrary = {};
             const allSections = await getAllSections();
             const allAudioData = await getAllData();
-            const presets = await getAllPresets();
-            const broadcastSets = await getAllBroadcastSets();
-            const serializedAudioData = await Promise.all(allAudioData.map(data => serializeAudioEntry(data, fileLibrary)));
-            const serializedPresets = await Promise.all(presets.map(p => serializeSceneLikeEntry(p, fileLibrary)));
-            const serializedBroadcastSets = await Promise.all(broadcastSets.map(s => serializeSceneLikeEntry(s, fileLibrary)));
+
+            // 音声ファイルは「ファイル名と設定だけ」を保存（バイナリは含めない）
+            const audioSettings = allAudioData.map(data => ({
+                id:        data.id,
+                fileName:  data.fileName || '',
+                volume:    data.volume,
+                loop:      data.loop,
+                mcVolume:  data.mcVolume
+            }));
 
             const memo = localStorage.getItem(MEMO_STORAGE_KEY) || "";
 
@@ -1914,19 +1477,11 @@ function initDataTransfer() {
             } catch(e) { /* 壊れていても続行 */ }
 
             const exportObj = {
-                version: 4,
-                exportType: 'pondashi_full_backup',
-                exportedAt: new Date().toISOString(),
-                includesAudioFiles: true,
-                files: fileLibrary,
-                sections: allSections,
-                audioData: serializedAudioData,
-                presets: serializedPresets,
-                broadcastSets: serializedBroadcastSets,
-                memo,
-                templates: parsedTemplates,
-                overlapStates: getStoredObject('pondashi_overlap_states'),
-                navVisibility: getStoredObject('pondashi_nav_visibility')
+                version:   2,
+                sections:  allSections,
+                audioData: audioSettings,
+                memo:      memo,
+                templates: parsedTemplates
             };
 
             const jsonString = JSON.stringify(exportObj, null, 2);
@@ -1935,23 +1490,24 @@ function initDataTransfer() {
 
             const a = document.createElement('a');
             a.href     = url;
-            a.download = 'pondashi_full_backup.json';
+            a.download = 'pondashi_settings.json';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(url), 1000);
 
             await customAlert(
-                '完全バックアップを書き出しました！\n' +
-                'ダウンロードフォルダに「pondashi_full_backup.json」が保存されました。\n\n' +
-                'オンライン版の「読み込み」からこのファイルを選ぶと、音源・プリセット・配信セット・メモを復元できます。'
+                '書き出し完了！\n' +
+                'ダウンロードフォルダに「pondashi_settings.json」が保存されました。\n\n' +
+                '※ 音声ファイルは含まれていません。\n' +
+                '読み込み後、各枠でファイルを再選択してください。'
             );
 
         } catch (e) {
             console.error("エクスポートエラー", e);
             await customAlert("書き出しに失敗しました。\nエラー: " + (e?.message || String(e)));
         } finally {
-            exportBtn.textContent = "完全書き出し";
+            exportBtn.textContent = "書き出し";
             exportBtn.disabled = false;
         }
     });
@@ -1961,6 +1517,7 @@ function initDataTransfer() {
         const file = e.target.files[0];
         if (!file) return;
 
+        // 読み込み中表示
         const labelEl = importInput.parentElement;
         const originalText = labelEl.innerHTML;
         labelEl.innerHTML = "読み込み中...";
@@ -1979,48 +1536,63 @@ function initDataTransfer() {
                     throw new Error("無効なファイルフォーマットです。");
                 }
 
-                const ok = await customConfirm("現在の設定・プリセット・配信セットはすべて上書きされます。よろしいですか？");
+                const ok = await customConfirm("現在の設定や欄はすべて上書きされます。よろしいですか？");
                 if (!ok) {
                     importInput.value = "";
                     labelEl.innerHTML = originalText;
                     return;
                 }
 
-                const fileLibrary = importedObj.files || {};
-                const restoredAudioData = (importedObj.audioData || []).map(a => deserializeAudioEntry(a, fileLibrary));
-                const restoredPresets = (importedObj.presets || []).map(p => ({
-                    ...p,
-                    audioData: (p.audioData || []).map(a => deserializeAudioEntry(a, fileLibrary))
-                }));
-                const restoredBroadcastSets = (importedObj.broadcastSets || []).map(s => ({
-                    ...s,
-                    audioData: (s.audioData || []).map(a => deserializeAudioEntry(a, fileLibrary))
-                }));
+                if (db) {
+                    // セクションの復元
+                    const txSec = db.transaction([STORE_NAME_SECTION], 'readwrite');
+                    txSec.objectStore(STORE_NAME_SECTION).clear();
+                    importedObj.sections.forEach(s => {
+                        txSec.objectStore(STORE_NAME_SECTION).put(s);
+                    });
 
-                await restoreObjectStore(STORE_NAME_SECTION, importedObj.sections || []);
-                await restoreObjectStore(STORE_NAME_AUDIO, restoredAudioData);
-                await restoreObjectStore(STORE_NAME_PRESET, restoredPresets);
-                await restoreObjectStore(STORE_NAME_BROADCAST_SET, restoredBroadcastSets);
+                    // オーディオ設定の復元
+                    // version 2（設定のみ）: file=null でファイル名だけ復元
+                    // 旧形式（fileDataUrl あり）: Base64からFileを復元
+                    const txAudio = db.transaction([STORE_NAME_AUDIO], 'readwrite');
+                    txAudio.objectStore(STORE_NAME_AUDIO).clear();
 
+                    importedObj.audioData.forEach(a => {
+                        let fileObj = null;
+                        if (a.fileDataUrl) {
+                            try {
+                                const arr  = a.fileDataUrl.split(',');
+                                const mime = arr[0].match(/:(.*?);/)[1];
+                                const bstr = atob(arr[1]);
+                                let n = bstr.length;
+                                const u8arr = new Uint8Array(n);
+                                while(n--) u8arr[n] = bstr.charCodeAt(n);
+                                fileObj = new File([u8arr], a.fileName, { type: mime });
+                            } catch(err) {
+                                console.warn("音声復元スキップ:", err);
+                            }
+                        }
+
+                        txAudio.objectStore(STORE_NAME_AUDIO).put({
+                            id:       a.id,
+                            file:     fileObj,   // null なら再選択が必要
+                            fileName: a.fileName || '',
+                            volume:   a.volume,
+                            loop:     a.loop,
+                            mcVolume: a.mcVolume
+                        });
+                    });
+                }
+
+                // メモ・テンプレートの復元
                 if (importedObj.memo !== undefined) {
                     localStorage.setItem(MEMO_STORAGE_KEY, importedObj.memo);
                 }
                 if (importedObj.templates !== undefined) {
                     localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(importedObj.templates));
                 }
-                if (importedObj.overlapStates !== undefined) {
-                    localStorage.setItem('pondashi_overlap_states', JSON.stringify(importedObj.overlapStates));
-                }
-                if (importedObj.navVisibility !== undefined) {
-                    localStorage.setItem('pondashi_nav_visibility', JSON.stringify(importedObj.navVisibility));
-                }
-                localStorage.setItem('pondashi_broadcast_set_migration_v1', '1');
 
-                const audioMessage = importedObj.includesAudioFiles
-                    ? "音声ファイルも復元しました。"
-                    : "音声ファイルは含まれていない形式のため、各枠で再選択してください。";
-
-                await customAlert(`バックアップの読み込みが完了しました！\n${audioMessage}\n画面を更新します。`);
+                await customAlert("設定の読み込みが完了しました！\n音声ファイルは各枠で再選択してください。\n画面を更新します。");
                 location.reload();
                 
             } catch (error) {
