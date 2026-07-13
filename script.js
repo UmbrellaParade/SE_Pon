@@ -913,8 +913,10 @@ function createItem(index, secId, style, container, initialData = null) {
     let mcBtnHtml = '';
     if (style !== 'pad') {
         mcHtml = `
-            <span style="margin-left:10px; font-size:0.9em;">MC時</span>
-            <input type="range" min="0" max="1" step="0.01" value="${mcVolume}" class="mc-vol-slider" style="width:60px;">
+            <span style="margin-left:6px; font-size:0.9em; white-space:nowrap;">MC時</span>
+            <button class="mc-vol-down-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">◀</button>
+            <input type="range" min="0" max="1" step="0.01" value="${mcVolume}" class="mc-vol-slider" style="flex:none; width:48px;">
+            <button class="mc-vol-up-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">▶</button>
         `;
         mcBtnHtml = `<button class="mc-btn">🎤 MC(音量下げる)</button>`;
     }
@@ -932,9 +934,11 @@ function createItem(index, secId, style, container, initialData = null) {
             ${currentFileName}
         </div>
         <input type="file" accept="audio/*" class="file-input">
-        <div class="volume-control">
+        <div class="volume-control" style="gap:4px;">
             <span>音量</span>
+            <button class="vol-down-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">◀</button>
             <input type="range" min="0" max="1" step="0.01" value="${baseVolume}" class="vol-slider">
+            <button class="vol-up-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">▶</button>
             ${mcHtml}
         </div>
         <div class="controls">
@@ -967,6 +971,10 @@ function createItem(index, secId, style, container, initialData = null) {
     const timeDisplay = item.querySelector('.time-display');
     const volSlider = item.querySelector('.vol-slider');
     const mcVolSlider = item.querySelector('.mc-vol-slider');
+    const volDownBtn = item.querySelector('.vol-down-btn');
+    const volUpBtn = item.querySelector('.vol-up-btn');
+    const mcVolDownBtn = item.querySelector('.mc-vol-down-btn');
+    const mcVolUpBtn = item.querySelector('.mc-vol-up-btn');
     const repeatCheck = item.querySelector('.repeat-check');
     const deleteBtn = item.querySelector('.delete-btn');
 
@@ -1113,6 +1121,23 @@ function createItem(index, secId, style, container, initialData = null) {
             updateDB();
         });
     }
+
+    const stepVol = (delta) => {
+        baseVolume = Math.min(1, Math.max(0, Math.round((baseVolume + delta) * 100) / 100));
+        volSlider.value = baseVolume;
+        if (!isMCMode) audio.volume = baseVolume;
+        updateDB();
+    };
+    const stepMcVol = (delta) => {
+        mcVolume = Math.min(1, Math.max(0, Math.round((mcVolume + delta) * 100) / 100));
+        if (mcVolSlider) mcVolSlider.value = mcVolume;
+        if (isMCMode) audio.volume = mcVolume;
+        updateDB();
+    };
+    volDownBtn?.addEventListener('click', () => stepVol(-0.01));
+    volUpBtn?.addEventListener('click', () => stepVol(0.01));
+    mcVolDownBtn?.addEventListener('click', () => stepMcVol(-0.01));
+    mcVolUpBtn?.addEventListener('click', () => stepMcVol(0.01));
 
     audio.addEventListener('play', () => {
         item.classList.add('playing');
