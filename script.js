@@ -3,11 +3,14 @@ const DB_NAME = 'PonDashiAppDB';
 const STORE_NAME_AUDIO = 'AudioFiles';
 const STORE_NAME_SECTION = 'Sections';
 const STORE_NAME_PRESET = 'Presets';
-const DB_VERSION = 4;
+// バージョンは3のまま維持する（不要なアップグレードはブロック事故・破損の原因になるため上げない）
+const DB_VERSION = 3;
 let db;
 
 function initDB() {
     return openPonDashiDB(DB_VERSION).catch((error) => {
+        // 既にDBがより新しいバージョン（v4など）になっている環境では、
+        // バージョン無指定で現状のまま開く（必要なストアはv3から共通）
         if (error?.name === 'VersionError') {
             return openPonDashiDB();
         }
@@ -31,16 +34,22 @@ function openPonDashiDB(version) {
                 db.createObjectStore(STORE_NAME_PRESET, { keyPath: 'id' });
             }
         };
+        request.onblocked = () => {
+            // 他のタブが古い接続を掴んでいるとアップグレードが進まない。
+            // 永遠に待たずに失敗させ、呼び出し側の警告バナーにつなげる
+            console.warn('IndexedDBのアップグレードがブロックされています。他のタブを閉じてください。');
+            reject(new Error('IndexedDB upgrade blocked'));
+        };
         request.onsuccess = (e) => {
             db = e.target.result;
+            // 別タブでのバージョンアップ時に自動で接続を閉じてブロック事故を防ぐ
             db.onversionchange = () => {
-                db.close();
+                try { db.close(); } catch (_) {}
                 db = null;
             };
             resolve();
         };
         request.onerror = (e) => reject(e.target.error || e);
-        request.onblocked = () => reject(new Error('IndexedDB upgrade blocked'));
     });
 }
 
@@ -453,7 +462,18 @@ const DEFAULT_SECTIONS = [
 document.addEventListener('DOMContentLoaded', async () => {
     initMemo(); // メモ機能の初期化
     try {
-        await initDB();
+        // DBが開けない状態でも画面が真っ白のまま固まらないよう、5秒で諦めて続行する
+        await Promise.race([
+            initDB(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('DB_TIMEOUT')), 5000))
+        ]).catch(err => {
+            console.error('DBの初期化に失敗しました', err);
+            const warn = document.createElement('div');
+            warn.style.cssText = 'background:#5c3a00; color:#ffd28a; border:1px solid #a76b00; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:0.9em; line-height:1.6;';
+            warn.textContent = '⚠ データの保存領域に接続できませんでした。ポン出しアプリを開いている他のタブ（ピン留め含む）をすべて閉じてから、ページを再読み込みしてください。この状態でも再生はできますが、保存はされません。';
+            const mc = document.querySelector('.main-container');
+            if (mc) mc.prepend(warn);
+        });
         sections = await getAllSections();
         if (sections.length === 0) {
             sections = DEFAULT_SECTIONS;
@@ -554,6 +574,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initResetButton();  // リセットボタンの初期化
         initGlobalVolume(); // 一括音量設定の初期化
         initPreset();       // プリセット機能の初期化
+        initBroadcastSet(); // 配信セット保存の初期化
     } catch (e) {
         console.error("データベースエラー", e);
     }
@@ -845,8 +866,10 @@ function createItem(index, secId, style, container, initialData = null) {
     let mcBtnHtml = '';
     if (style !== 'pad') {
         mcHtml = `
-            <span style="margin-left:10px; font-size:0.9em;">MC時</span>
-            <input type="range" min="0" max="1" step="0.01" value="${mcVolume}" class="mc-vol-slider" style="width:60px;">
+            <span style="margin-left:6px; font-size:0.9em; white-space:nowrap;">MC時</span>
+            <button class="mc-vol-down-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">◀</button>
+            <input type="range" min="0" max="1" step="0.01" value="${mcVolume}" class="mc-vol-slider" style="flex:none; width:48px;">
+            <button class="mc-vol-up-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">▶</button>
         `;
         mcBtnHtml = `<button class="mc-btn">🎤 MC(音量下げる)</button>`;
     }
@@ -864,9 +887,11 @@ function createItem(index, secId, style, container, initialData = null) {
             ${currentFileName}
         </div>
         <input type="file" accept="audio/*" class="file-input">
-        <div class="volume-control">
+        <div class="volume-control" style="gap:4px;">
             <span>音量</span>
+            <button class="vol-down-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">◀</button>
             <input type="range" min="0" max="1" step="0.01" value="${baseVolume}" class="vol-slider">
+            <button class="vol-up-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">▶</button>
             ${mcHtml}
         </div>
         <div class="controls">
@@ -899,6 +924,10 @@ function createItem(index, secId, style, container, initialData = null) {
     const timeDisplay = item.querySelector('.time-display');
     const volSlider = item.querySelector('.vol-slider');
     const mcVolSlider = item.querySelector('.mc-vol-slider');
+    const volDownBtn = item.querySelector('.vol-down-btn');
+    const volUpBtn = item.querySelector('.vol-up-btn');
+    const mcVolDownBtn = item.querySelector('.mc-vol-down-btn');
+    const mcVolUpBtn = item.querySelector('.mc-vol-up-btn');
     const repeatCheck = item.querySelector('.repeat-check');
     const deleteBtn = item.querySelector('.delete-btn');
 
@@ -1045,6 +1074,24 @@ function createItem(index, secId, style, container, initialData = null) {
             updateDB();
         });
     }
+
+    // ◀▶ボタンで±1%ずつ微調整
+    const stepVol = (delta) => {
+        baseVolume = Math.min(1, Math.max(0, Math.round((baseVolume + delta) * 100) / 100));
+        volSlider.value = baseVolume;
+        if (!isMCMode) audio.volume = baseVolume;
+        updateDB();
+    };
+    const stepMcVol = (delta) => {
+        mcVolume = Math.min(1, Math.max(0, Math.round((mcVolume + delta) * 100) / 100));
+        if (mcVolSlider) mcVolSlider.value = mcVolume;
+        if (isMCMode) audio.volume = mcVolume;
+        updateDB();
+    };
+    volDownBtn?.addEventListener('click', () => stepVol(-0.01));
+    volUpBtn?.addEventListener('click', () => stepVol(0.01));
+    mcVolDownBtn?.addEventListener('click', () => stepMcVol(-0.01));
+    mcVolUpBtn?.addEventListener('click', () => stepMcVol(0.01));
 
     audio.addEventListener('play', () => {
         item.classList.add('playing');
@@ -1304,7 +1351,8 @@ function initPreset() {
     let presetList = [];
 
     async function loadPresets() {
-        presetList = await getAllPresets();
+        // 配信セット（kind: 'broadcast'）は別UIで扱うので除外する
+        presetList = (await getAllPresets()).filter(p => p.kind !== 'broadcast');
         // 作成日時の新しい順に並べる
         presetList.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         renderPresetOptions();
@@ -1454,6 +1502,165 @@ function initPreset() {
     });
 
     loadPresets();
+}
+
+// --- 配信セット保存機能 ---
+// 段取りメモ・テンプレート・音源・欄構成をまるごと1つのセットとして保存する。
+// 既存のPresetsストアに kind: 'broadcast' 付きで相乗りするため、DBのバージョン変更は不要。
+function initBroadcastSet() {
+    const setSelect    = document.getElementById('broadcast-set-select');
+    const loadSetBtn   = document.getElementById('load-broadcast-set-btn');
+    const saveSetBtn   = document.getElementById('save-broadcast-set-btn');
+    const updateSetBtn = document.getElementById('update-broadcast-set-btn');
+    const deleteSetBtn = document.getElementById('delete-broadcast-set-btn');
+
+    if (!setSelect || !saveSetBtn) return;
+
+    let setList = [];
+
+    async function loadSets(selectedId = '') {
+        setList = (await getAllPresets()).filter(p => p.kind === 'broadcast');
+        setList.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setSelect.innerHTML = '<option value="">-- セットを選択 --</option>';
+        setList.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name;
+            setSelect.appendChild(opt);
+        });
+        if (selectedId) setSelect.value = selectedId;
+    }
+
+    async function buildBroadcastSet(name, base = null) {
+        const allSections  = await getAllSections();
+        const allAudioData = await getAllData(); // Fileオブジェクトごと保存
+        return {
+            id:        base ? base.id : 'bset_' + Date.now(),
+            kind:      'broadcast',
+            name:      name,
+            createdAt: base ? (base.createdAt || new Date().toISOString()) : new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            memo:      localStorage.getItem(MEMO_STORAGE_KEY) || '',
+            templates: localStorage.getItem(TEMPLATE_STORAGE_KEY) || '[]',
+            sections:  allSections,
+            audioData: allAudioData,
+            overlapStates: (() => { try { return JSON.parse(localStorage.getItem('pondashi_overlap_states') || '{}'); } catch(e) { return {}; } })(),
+            navVisibility: (() => { try { return JSON.parse(localStorage.getItem('pondashi_nav_visibility') || '{}'); } catch(e) { return {}; } })(),
+        };
+    }
+
+    // 新規保存
+    saveSetBtn.addEventListener('click', async () => {
+        const name = await customPrompt(
+            '配信セットの名前を入力してください\nメモ・テンプレート・音源・欄構成をまとめて保存します。\n（例: 7/13 Sunoパ本番、ゲスト回用 など）'
+        );
+        if (!name || name.trim() === '') return;
+
+        try {
+            saveSetBtn.textContent = '保存中...';
+            saveSetBtn.disabled = true;
+
+            const set = await buildBroadcastSet(name.trim());
+            await savePresetToDB(set);
+            await loadSets(set.id);
+            await customAlert(`配信セット「${set.name}」を保存しました！`);
+        } catch(e) {
+            console.error('配信セット保存エラー', e);
+            await customAlert('保存に失敗しました。\nエラー: ' + (e?.message || String(e)));
+        } finally {
+            saveSetBtn.textContent = '新規保存';
+            saveSetBtn.disabled = false;
+        }
+    });
+
+    // 上書き保存
+    updateSetBtn.addEventListener('click', async () => {
+        const id = setSelect.value;
+        if (!id) { await customAlert('上書きする配信セットを選択してください。'); return; }
+        const s = setList.find(x => x.id === id);
+        if (!s) return;
+
+        const ok = await customConfirm(`「${s.name}」を現在のメモ・音源・欄構成で上書きしますか？`);
+        if (!ok) return;
+
+        try {
+            updateSetBtn.textContent = '保存中...';
+            updateSetBtn.disabled = true;
+
+            const updated = await buildBroadcastSet(s.name, s);
+            await savePresetToDB(updated);
+            await loadSets(id);
+            await customAlert('上書き保存しました！');
+        } catch(e) {
+            console.error('配信セット上書きエラー', e);
+            await customAlert('保存に失敗しました。\nエラー: ' + (e?.message || String(e)));
+        } finally {
+            updateSetBtn.textContent = '上書き';
+            updateSetBtn.disabled = false;
+        }
+    });
+
+    // 読込
+    loadSetBtn.addEventListener('click', async () => {
+        const id = setSelect.value;
+        if (!id) { await customAlert('読み込む配信セットを選択してください。'); return; }
+        const s = setList.find(x => x.id === id);
+        if (!s) return;
+
+        const ok = await customConfirm(`「${s.name}」を読み込みます。\n現在のメモ・テンプレート・音源・欄構成は上書きされます。よろしいですか？`);
+        if (!ok) return;
+
+        try {
+            // セクションを復元
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction([STORE_NAME_SECTION], 'readwrite');
+                const store = tx.objectStore(STORE_NAME_SECTION);
+                store.clear();
+                s.sections.forEach(x => store.put(x));
+                tx.oncomplete = () => resolve();
+                tx.onerror = (e) => reject(e);
+            });
+
+            // 音声データをFileオブジェクトごと復元
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction([STORE_NAME_AUDIO], 'readwrite');
+                const store = tx.objectStore(STORE_NAME_AUDIO);
+                store.clear();
+                s.audioData.forEach(x => store.put(x));
+                tx.oncomplete = () => resolve();
+                tx.onerror = (e) => reject(e);
+            });
+
+            // メモ・テンプレート・表示状態を復元
+            localStorage.setItem(MEMO_STORAGE_KEY, s.memo || '');
+            if (s.templates) localStorage.setItem(TEMPLATE_STORAGE_KEY, s.templates);
+            if (s.overlapStates) localStorage.setItem('pondashi_overlap_states', JSON.stringify(s.overlapStates));
+            if (s.navVisibility)  localStorage.setItem('pondashi_nav_visibility',  JSON.stringify(s.navVisibility));
+
+            await customAlert(`「${s.name}」を読み込みました！\n画面を更新します。`);
+            location.reload();
+        } catch(e) {
+            console.error('配信セット読込エラー', e);
+            await customAlert('読み込みに失敗しました。\nエラー: ' + (e?.message || String(e)));
+        }
+    });
+
+    // 削除
+    deleteSetBtn.addEventListener('click', async () => {
+        const id = setSelect.value;
+        if (!id) { await customAlert('削除する配信セットを選択してください。'); return; }
+        const s = setList.find(x => x.id === id);
+        if (!s) return;
+
+        const ok = await customConfirm(`本当に配信セット「${s.name}」を削除しますか？`);
+        if (!ok) return;
+
+        await deletePresetFromDB(id);
+        await loadSets();
+        await customAlert('配信セットを削除しました。');
+    });
+
+    loadSets();
 }
 
 // --- データ引き継ぎ（エクスポート・インポート）機能 ---
