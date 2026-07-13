@@ -35,10 +35,30 @@ function initDB() {
 }
 
 function saveData(id, file, fileName, volume, loop, mcVolume = 0.1) {
-    if (!db) return;
-    const transaction = db.transaction([STORE_NAME_AUDIO], 'readwrite');
-    const store = transaction.objectStore(STORE_NAME_AUDIO);
-    store.put({ id, file, fileName, volume, loop, mcVolume });
+    return new Promise((resolve) => {
+        if (!db) {
+            console.error('音声保存エラー: DB not initialized');
+            return resolve(false);
+        }
+
+        try {
+            const transaction = db.transaction([STORE_NAME_AUDIO], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME_AUDIO);
+            store.put({ id, file, fileName, volume, loop, mcVolume });
+            transaction.oncomplete = () => resolve(true);
+            transaction.onerror = (e) => {
+                console.error('音声保存エラー', e.target.error);
+                resolve(false);
+            };
+            transaction.onabort = (e) => {
+                console.error('音声保存中断', e.target.error);
+                resolve(false);
+            };
+        } catch(e) {
+            console.error('音声保存エラー', e);
+            resolve(false);
+        }
+    });
 }
 
 function getAllData() {
