@@ -30,17 +30,31 @@ function getMissingStoreNames(database) {
 
 function openPonDashiDB(version) {
     return new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (callback) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
+            callback();
+        };
+        const timeoutId = setTimeout(() => {
+            finish(() => reject(new Error('IndexedDB open timed out. Close other app tabs and reload.')));
+        }, 3000);
         const request = version ? indexedDB.open(DB_NAME, version) : indexedDB.open(DB_NAME);
         request.onupgradeneeded = (e) => {
             db = e.target.result;
             createMissingStores(db);
         };
         request.onsuccess = (e) => {
+            if (settled) {
+                e.target.result.close();
+                return;
+            }
             db = e.target.result;
-            resolve(db);
+            finish(() => resolve(db));
         };
-        request.onerror = (e) => reject(e.target.error || e);
-        request.onblocked = () => reject(new Error('IndexedDB upgrade blocked. Close other app tabs and reload.'));
+        request.onerror = (e) => finish(() => reject(e.target.error || e));
+        request.onblocked = () => finish(() => reject(new Error('IndexedDB upgrade blocked. Close other app tabs and reload.')));
     });
 }
 
