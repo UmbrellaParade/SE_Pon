@@ -67,7 +67,14 @@ h2 {
 }
 
 .bgm-grid {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+/* サイドバー込みのデスクトップ幅では、BGM枠を1行4つに揃える */
+@media (min-width: 1600px) {
+    .bgm-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
 }
 
 .pad-grid {
@@ -83,6 +90,8 @@ h2 {
     flex-direction: column;
     gap: 15px;
     transition: box-shadow 0.3s, border-color 0.3s;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .sound-item:hover {
@@ -200,12 +209,39 @@ button:hover {
 
 .volume-control {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    gap: 6px;
     font-size: 0.9rem;
     background-color: #222;
     padding: 8px 12px;
-    border-radius: 20px;
+    border-radius: 14px;
+    min-width: 0;
+}
+
+.volume-row {
+    display: grid;
+    grid-template-columns: 34px 24px minmax(0, 1fr) 24px;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.volume-label {
+    white-space: nowrap;
+    text-align: right;
+}
+
+.volume-step-btn {
+    width: 24px;
+    min-width: 24px;
+    padding: 1px 0;
+    line-height: 1.4;
+    flex: none;
+}
+
+.volume-control input[type="range"] {
+    width: 100%;
+    min-width: 0;
 }
 
 input[type="range"] {
