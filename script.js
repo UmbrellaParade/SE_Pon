@@ -866,10 +866,12 @@ function createItem(index, secId, style, container, initialData = null) {
     let mcBtnHtml = '';
     if (style !== 'pad') {
         mcHtml = `
-            <span style="margin-left:6px; font-size:0.9em; white-space:nowrap;">MC時</span>
-            <button class="mc-vol-down-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">◀</button>
-            <input type="range" min="0" max="1" step="0.01" value="${mcVolume}" class="mc-vol-slider" style="flex:none; width:48px;">
-            <button class="mc-vol-up-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">▶</button>
+            <div class="volume-row">
+                <span class="volume-label">MC時</span>
+                <button class="mc-vol-down-btn volume-step-btn">◀</button>
+                <input type="range" min="0" max="1" step="0.01" value="${mcVolume}" class="mc-vol-slider">
+                <button class="mc-vol-up-btn volume-step-btn">▶</button>
+            </div>
         `;
         mcBtnHtml = `<button class="mc-btn">🎤 MC(音量下げる)</button>`;
     }
@@ -887,11 +889,13 @@ function createItem(index, secId, style, container, initialData = null) {
             ${currentFileName}
         </div>
         <input type="file" accept="audio/*" class="file-input">
-        <div class="volume-control" style="gap:4px;">
-            <span>音量</span>
-            <button class="vol-down-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">◀</button>
-            <input type="range" min="0" max="1" step="0.01" value="${baseVolume}" class="vol-slider">
-            <button class="vol-up-btn" style="padding:1px 5px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:0.75em; flex-shrink:0; line-height:1.4;">▶</button>
+        <div class="volume-control">
+            <div class="volume-row">
+                <span class="volume-label">音量</span>
+                <button class="vol-down-btn volume-step-btn">◀</button>
+                <input type="range" min="0" max="1" step="0.01" value="${baseVolume}" class="vol-slider">
+                <button class="vol-up-btn volume-step-btn">▶</button>
+            </div>
             ${mcHtml}
         </div>
         <div class="controls">
